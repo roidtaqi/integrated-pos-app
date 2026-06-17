@@ -3,7 +3,7 @@ import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import { authService } from '../services/authService';
 import { navItems } from '../navigation';
 
-const primaryMobilePaths = new Set(['/pos', '/products', '/stock', '/profile']);
+const primaryMobilePaths = new Set(['/pos', '/products', '/stock', '/shift']);
 
 export default function More() {
   const user = authService.getCurrentUser();

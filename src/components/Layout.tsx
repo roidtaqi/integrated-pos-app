@@ -32,7 +32,7 @@ export default function Layout() {
     [user]
   );
   const mobileNav = useMemo(() => {
-    const primaryPaths = new Set(['/pos', '/products', '/stock', '/profile']);
+    const primaryPaths = new Set(['/pos', '/products', '/stock', '/shift']);
     const primaryItems = allowedNav.filter((item) => primaryPaths.has(item.path));
     return [
       ...primaryItems,
