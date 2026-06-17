@@ -257,7 +257,7 @@ export default function POS() {
         transactionId: result.transactionId,
         cashierName: user.name,
         createdAt: new Date().toISOString(),
-        storeName: settings?.store_name || 'Integrated POS App',
+        storeName: settings?.store_name || 'Kastur POS',
         storeAddress: settings?.store_address || '-',
         storePhone: settings?.store_phone || '-',
         receiptFooter: settings?.receipt_footer || 'Terima kasih',

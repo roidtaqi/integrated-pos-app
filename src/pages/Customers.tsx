@@ -120,7 +120,7 @@ export default function Customers() {
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                   className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-primary-500 outline-none"
-                  placeholder="Budi Santoso"
+                  placeholder="Roid Nawir"
                 />
               </div>
               <div>

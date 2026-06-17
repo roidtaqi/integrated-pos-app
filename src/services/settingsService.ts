@@ -10,10 +10,10 @@ export interface ReceiptSettings {
 }
 
 const defaults: ReceiptSettings = {
-  store_name: 'Integrated POS App',
-  store_address: 'Jl. Contoh Kasir No.123',
+  store_name: 'Kastur POS',
+  store_address: 'Jl. Roid Nawir No. 1',
   store_phone: '08123456789',
-  receipt_footer: 'Terima kasih atas kunjungan Anda',
+  receipt_footer: 'Terima kasih sudah belanja di Kastur',
   tax_enabled: false,
   tax_rate: 0
 };

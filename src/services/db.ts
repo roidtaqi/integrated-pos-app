@@ -322,31 +322,50 @@ export const DEFAULT_ROLES: Role[] = [
 ];
 
 const DEFAULT_USERS: User[] = [
-  { id: 'usr_owner', name: 'Budi Owner', role_id: 'role_owner', role: 'Owner', pin: '1111', is_active: true, created_at: now() },
-  { id: 'usr_admin', name: 'Andi Admin', role_id: 'role_admin', role: 'Admin', pin: '2222', is_active: true, created_at: now() },
-  { id: 'usr_spv', name: 'Siti Supervisor', role_id: 'role_supervisor', role: 'Supervisor', pin: '3333', is_active: true, created_at: now() },
-  { id: 'usr_kasir1', name: 'Kasir Satu', role_id: 'role_kasir', role: 'Kasir', pin: '4444', is_active: true, created_at: now() },
-  { id: 'usr_kasir2', name: 'Kasir Dua', role_id: 'role_kasir', role: 'Kasir', pin: '5555', is_active: true, created_at: now() }
+  { id: 'usr_owner', name: 'Roid Owner', role_id: 'role_owner', role: 'Owner', pin: '1111', is_active: true, created_at: now() },
+  { id: 'usr_admin', name: 'Nawir Admin', role_id: 'role_admin', role: 'Admin', pin: '2222', is_active: true, created_at: now() },
+  { id: 'usr_spv', name: 'Kastur Supervisor', role_id: 'role_supervisor', role: 'Supervisor', pin: '3333', is_active: true, created_at: now() },
+  { id: 'usr_kasir1', name: 'Roid Kasir', role_id: 'role_kasir', role: 'Kasir', pin: '4444', is_active: true, created_at: now() },
+  { id: 'usr_kasir2', name: 'Nawir Kasir', role_id: 'role_kasir', role: 'Kasir', pin: '5555', is_active: true, created_at: now() }
 ];
 
 const DEFAULT_OUTLET: Outlet = {
   id: 'outlet_001',
-  name: 'Outlet Utama',
-  address: 'Jl. Contoh Kasir No.123',
+  name: 'Kastur Outlet',
+  address: 'Jl. Roid Nawir No. 1',
   phone: '08123456789',
   is_default: true,
   created_at: now()
 };
 
 const DEFAULT_SETTINGS: AppSetting[] = [
-  { key: 'store_name', value: 'Integrated POS App', updated_at: now() },
-  { key: 'store_address', value: 'Jl. Contoh Kasir No.123', updated_at: now() },
+  { key: 'store_name', value: 'Kastur POS', updated_at: now() },
+  { key: 'store_address', value: 'Jl. Roid Nawir No. 1', updated_at: now() },
   { key: 'store_phone', value: '08123456789', updated_at: now() },
-  { key: 'receipt_footer', value: 'Terima kasih atas kunjungan Anda', updated_at: now() },
+  { key: 'receipt_footer', value: 'Terima kasih sudah belanja di Kastur', updated_at: now() },
   { key: 'tax_enabled', value: 'false', updated_at: now() },
   { key: 'tax_rate', value: '0', updated_at: now() },
   { key: 'integration_source', value: 'Inventory Pricing App', updated_at: now() }
 ];
+
+const LEGACY_DEFAULT_USER_NAMES: Record<string, string> = {
+  usr_owner: 'Budi Owner',
+  usr_admin: 'Andi Admin',
+  usr_spv: 'Siti Supervisor',
+  usr_kasir1: 'Kasir Satu',
+  usr_kasir2: 'Kasir Dua'
+};
+
+const LEGACY_DEFAULT_SETTING_VALUES: Record<string, string> = {
+  store_name: 'Integrated POS App',
+  store_address: 'Jl. Contoh Kasir No.123',
+  receipt_footer: 'Terima kasih atas kunjungan Anda'
+};
+
+const LEGACY_DEFAULT_OUTLET = {
+  name: 'Outlet Utama',
+  address: 'Jl. Contoh Kasir No.123'
+};
 
 export async function initializeDatabase() {
   await db.open();
@@ -362,14 +381,32 @@ export async function initializeDatabase() {
 
     if ((await db.users.count()) === 0) {
       await db.users.bulkPut(DEFAULT_USERS);
+    } else {
+      for (const defaultUser of DEFAULT_USERS) {
+        const currentUser = await db.users.get(defaultUser.id);
+        if (currentUser?.name === LEGACY_DEFAULT_USER_NAMES[defaultUser.id]) {
+          await db.users.update(defaultUser.id, { name: defaultUser.name });
+        }
+      }
     }
 
     if ((await db.outlets.count()) === 0) {
       await db.outlets.put(DEFAULT_OUTLET);
+    } else {
+      const outlet = await db.outlets.get(DEFAULT_OUTLET.id);
+      if (outlet?.name === LEGACY_DEFAULT_OUTLET.name && outlet.address === LEGACY_DEFAULT_OUTLET.address) {
+        await db.outlets.update(DEFAULT_OUTLET.id, {
+          name: DEFAULT_OUTLET.name,
+          address: DEFAULT_OUTLET.address
+        });
+      }
     }
 
     for (const setting of DEFAULT_SETTINGS) {
-      if (!(await db.app_settings.get(setting.key))) {
+      const existingSetting = await db.app_settings.get(setting.key);
+      if (!existingSetting) {
+        await db.app_settings.put(setting);
+      } else if (existingSetting.value === LEGACY_DEFAULT_SETTING_VALUES[setting.key]) {
         await db.app_settings.put(setting);
       }
     }

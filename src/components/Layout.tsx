@@ -92,7 +92,7 @@ export default function Layout() {
             <span className="bg-primary-600 text-white p-1.5 rounded-lg">
               <ShoppingCart size={20} />
             </span>
-            Integrated POS
+            Kastur POS
           </h1>
         </div>
 

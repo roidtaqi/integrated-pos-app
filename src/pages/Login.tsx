@@ -36,7 +36,7 @@ export default function Login() {
           <div className="bg-primary-600 text-white p-3 rounded-xl mb-4 shadow-sm">
             <ShoppingCart size={32} />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">POS App</h1>
+          <h1 className="text-2xl font-bold text-slate-900">Kastur POS</h1>
           <p className="text-slate-500 text-sm mt-1">Masukkan PIN untuk masuk</p>
         </div>
 
@@ -86,8 +86,8 @@ export default function Login() {
         </div>
         
         <div className="text-center text-xs text-slate-400">
-          <p>Owner: 1111 | Admin: 2222</p>
-          <p>Supervisor: 3333 | Kasir: 4444</p>
+          <p>Roid: 1111 | Nawir: 2222</p>
+          <p>Kastur: 3333 | Kasir: 4444</p>
         </div>
       </div>
     </div>

@@ -12,9 +12,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'icons.svg'],
       manifest: {
-        name: 'Integrated POS App',
-        short_name: 'POS App',
-        description: 'Modern Offline-First Point of Sale',
+        name: 'Kastur POS',
+        short_name: 'Kastur',
+        description: 'POS offline-first untuk Kastur',
         theme_color: '#0284c7',
         background_color: '#f8fafc',
         display: 'standalone',

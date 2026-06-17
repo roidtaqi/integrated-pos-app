@@ -1,6 +1,6 @@
-# Integrated POS App
+# Kastur POS
 
-Integrated POS App adalah aplikasi kasir/POS modern, offline-first, dan PWA-installable. Aplikasi ini dibuat sebagai sales execution layer yang terpisah dari Inventory Pricing App.
+Kastur POS adalah aplikasi kasir/POS modern, offline-first, dan PWA-installable. Aplikasi ini dibuat sebagai sales execution layer yang terpisah dari Inventory Pricing App.
 
 Inventory Pricing App tetap menjadi pricing master / pricing engine untuk produk, SKU, barcode, satuan, cost, effective date, dan harga aktif. POS ini tidak menghitung margin, tidak mengubah approval harga, dan tidak membawa margin rule ke layar kasir.
 
@@ -51,7 +51,7 @@ Untuk melengkapi suite ini, deploy dua service dari repo `integrated-pos-app`:
 - `integrated-pos-app` untuk frontend POS.
 - `integrated-pos-sync-server` untuk WebSocket sync antara Inventory dan POS.
 
-### Service 1 - Integrated POS App
+### Service 1 - Kastur POS
 
 1. Buka Railway project yang ingin dipakai.
 2. Pilih `New -> GitHub Repo`.
@@ -100,7 +100,7 @@ wss://integrated-pos-sync-server.up.railway.app
 Masukkan URL tersebut di:
 
 - Inventory Pricing App: `Home -> Data & Pengaturan -> Sync`.
-- Integrated POS App: `Sinkronisasi -> Real-time Sync`.
+- Kastur POS: `Sinkronisasi -> Real-time Sync`.
 
 Setelah kedua aplikasi tersambung:
 
@@ -160,10 +160,10 @@ npm run build
 
 | Role | PIN | Akses |
 | --- | --- | --- |
-| Owner | `1111` | Semua akses |
-| Admin | `2222` | Produk, stok, laporan, shift, sinkronisasi, pengaturan |
-| Supervisor | `3333` | POS, shift, laporan, diskon, void/refund future |
-| Kasir | `4444` / `5555` | POS, buka/tutup shift, pelanggan, cetak struk |
+| Roid Owner | `1111` | Semua akses |
+| Nawir Admin | `2222` | Produk, stok, laporan, shift, sinkronisasi, pengaturan |
+| Kastur Supervisor | `3333` | POS, shift, laporan, diskon, void/refund future |
+| Roid/Nawir Kasir | `4444` / `5555` | POS, buka/tutup shift, pelanggan, cetak struk |
 
 ## Modul MVP
 

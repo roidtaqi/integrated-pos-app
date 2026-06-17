@@ -167,7 +167,7 @@ export const realtimeSyncService = {
       send({
         type: 'client.hello',
         app: 'pos',
-        client_name: 'Integrated POS App',
+        client_name: 'Kastur POS',
         outlet_id: 'outlet_001'
       });
       void publishPendingQueue();
