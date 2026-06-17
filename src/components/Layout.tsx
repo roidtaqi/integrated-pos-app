@@ -1,50 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import {
-  ArrowRightLeft,
-  BarChart3,
-  Clock,
-  LayoutDashboard,
-  LogOut,
-  Package,
-  RefreshCw,
-  Settings,
-  ShoppingCart,
-  UserRound,
-  Users,
-  Wifi,
-  WifiOff
-} from 'lucide-react';
+import { LogOut, MoreHorizontal, ShoppingCart, Wifi, WifiOff } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { authService } from '../services/authService';
-import type { PermissionCode } from '../services/db';
+import { navItems } from '../navigation';
 
 function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
 }
 
-const navItems: {
-  name: string;
-  path: string;
-  icon: typeof LayoutDashboard;
-  permission?: PermissionCode;
-}[] = [
-  { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard:view' },
-  { name: 'Kasir', path: '/pos', icon: ShoppingCart, permission: 'pos:use' },
-  { name: 'Produk', path: '/products', icon: Package, permission: 'products:read' },
-  { name: 'Stok', path: '/stock', icon: ArrowRightLeft, permission: 'stock:read' },
-  { name: 'Shift', path: '/shift', icon: Clock, permission: 'shift:manage' },
-  { name: 'Laporan', path: '/reports', icon: BarChart3, permission: 'reports:view' },
-  { name: 'Pelanggan', path: '/customers', icon: Users, permission: 'customers:manage' },
-  { name: 'Sinkronisasi', path: '/sync', icon: RefreshCw, permission: 'sync:manage' },
-  { name: 'Pengaturan', path: '/settings', icon: Settings, permission: 'settings:manage' },
-  { name: 'Profil', path: '/profile', icon: UserRound }
-];
-
 export default function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const user = authService.getCurrentUser();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
@@ -63,9 +32,12 @@ export default function Layout() {
     [user]
   );
   const mobileNav = useMemo(() => {
-    const profileItem = allowedNav.find((item) => item.path === '/profile');
-    const primaryItems = allowedNav.filter((item) => item.path !== '/profile').slice(0, 4);
-    return profileItem ? [...primaryItems, profileItem] : primaryItems;
+    const primaryPaths = new Set(['/pos', '/products', '/stock', '/profile']);
+    const primaryItems = allowedNav.filter((item) => primaryPaths.has(item.path));
+    return [
+      ...primaryItems,
+      { name: 'Lainnya', path: '/more', icon: MoreHorizontal }
+    ];
   }, [allowedNav]);
 
   const handleLogout = () => {
@@ -170,7 +142,9 @@ export default function Layout() {
               className={({ isActive }) =>
                 cn(
                   'h-16 flex flex-col items-center justify-center gap-1 text-[11px] font-bold',
-                  isActive ? 'text-primary-700 bg-primary-50' : 'text-slate-500'
+                  isActive || (item.path === '/more' && !mobileNav.some((navItem) => navItem.path !== '/more' && navItem.path === location.pathname))
+                    ? 'text-primary-700 bg-primary-50'
+                    : 'text-slate-500'
                 )
               }
             >

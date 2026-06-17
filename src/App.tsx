@@ -13,6 +13,7 @@ import Shift from './pages/Shift';
 import Customers from './pages/Customers';
 import Settings from './pages/Settings';
 import Profile from './pages/Profile';
+import More from './pages/More';
 import { authService } from './services/authService';
 import type { PermissionCode } from './services/db';
 
@@ -51,6 +52,7 @@ function App() {
             <Route path="sync" element={<PermissionGate permission="sync:manage"><Sync /></PermissionGate>} />
             <Route path="settings" element={<PermissionGate permission="settings:manage"><Settings /></PermissionGate>} />
             <Route path="profile" element={<Profile />} />
+            <Route path="more" element={<More />} />
           </Route>
         </Route>
       </Routes>
