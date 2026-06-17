@@ -1,4 +1,5 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -6,7 +7,7 @@ import { WebSocketServer } from 'ws';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(__dirname, '..', '.sync-data');
 const stateFile = join(dataDir, 'realtime-sync-state.json');
-const port = Number(process.env.SYNC_PORT || 8787);
+const port = Number(process.env.PORT || process.env.SYNC_PORT || 8787);
 
 const state = {
   latestCatalogEvent: null,
@@ -74,7 +75,18 @@ function buildHelloState(client) {
 
 await loadState();
 
-const server = new WebSocketServer({ port });
+const httpServer = createServer((request, response) => {
+  if (request.url === '/health') {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ ok: true, service: 'integrated-pos-sync-server' }));
+    return;
+  }
+
+  response.writeHead(200, { 'content-type': 'text/plain' });
+  response.end('Integrated POS realtime sync server. Use WebSocket clients to connect.\n');
+});
+
+const server = new WebSocketServer({ server: httpServer });
 
 server.on('connection', (socket) => {
   const client = {
@@ -192,4 +204,6 @@ server.on('connection', (socket) => {
   });
 });
 
-console.log(`Integrated POS realtime sync server listening on ws://localhost:${port}`);
+httpServer.listen(port, () => {
+  console.log(`Integrated POS realtime sync server listening on port ${port}`);
+});

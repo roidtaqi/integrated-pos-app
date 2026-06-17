@@ -38,6 +38,33 @@ npm run build
 npm run preview
 ```
 
+## Deploy Gratis ke Render
+
+Repo ini menyediakan `render.yaml` untuk deploy tiga service sekaligus:
+
+- `inventory-pricing-app` dari repo `roidtaqi/inventory-pricing-app` sebagai Render Static Site.
+- `integrated-pos-app` sebagai Render Static Site.
+- `integrated-pos-sync-server` sebagai Render Free Web Service untuk realtime WebSocket sync.
+
+Langkah:
+
+1. Push repo `inventory-pricing-app` dan `integrated-pos-app` ke GitHub.
+2. Buka Render Dashboard.
+3. Pilih `New -> Blueprint`.
+4. Pilih repo `roidtaqi/integrated-pos-app`.
+5. Pastikan Blueprint Path memakai `render.yaml`.
+6. Klik `Apply` / `Deploy Blueprint`.
+7. Setelah deploy selesai, buka service `integrated-pos-sync-server`.
+8. Salin URL Render, misalnya `https://integrated-pos-sync-server.onrender.com`.
+9. Ubah menjadi `wss://integrated-pos-sync-server.onrender.com`.
+10. Masukkan URL `wss://...` itu di halaman Sinkronisasi POS dan halaman Sync Inventory Pricing App.
+
+Catatan Render Free:
+
+- Web service gratis bisa sleep setelah tidak aktif. Koneksi pertama bisa butuh waktu saat service bangun.
+- Jika sync belum connect, buka `https://integrated-pos-sync-server.onrender.com/health` untuk membangunkan service.
+- State sync server di free service tidak untuk production final karena storage lokal bisa hilang saat restart/redeploy.
+
 Quality check:
 
 ```bash
