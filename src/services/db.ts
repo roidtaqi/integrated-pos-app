@@ -44,6 +44,10 @@ export interface User {
   role_id: string;
   role: RoleName;
   pin: string;
+  phone?: string;
+  email?: string;
+  position_title?: string;
+  profile_note?: string;
   is_active: boolean;
   created_at: string;
 }
@@ -313,6 +317,8 @@ const adminPermissions: PermissionCode[] = [
   'receipt:print'
 ];
 const ownerPermissions = DEFAULT_PERMISSIONS.map((permission) => permission.code);
+const hasAllOwnerPermissions = (permissions: PermissionCode[]) =>
+  ownerPermissions.every((permission) => permissions.includes(permission));
 
 export const DEFAULT_ROLES: Role[] = [
   { id: 'role_owner', name: 'Owner', description: 'Akses penuh seluruh aplikasi', permissions: ownerPermissions },
@@ -322,11 +328,71 @@ export const DEFAULT_ROLES: Role[] = [
 ];
 
 const DEFAULT_USERS: User[] = [
-  { id: 'usr_owner', name: 'Roid Owner', role_id: 'role_owner', role: 'Owner', pin: '1111', is_active: true, created_at: now() },
-  { id: 'usr_admin', name: 'Nawir Admin', role_id: 'role_admin', role: 'Admin', pin: '2222', is_active: true, created_at: now() },
-  { id: 'usr_spv', name: 'Kastur Supervisor', role_id: 'role_supervisor', role: 'Supervisor', pin: '3333', is_active: true, created_at: now() },
-  { id: 'usr_kasir1', name: 'Roid Kasir', role_id: 'role_kasir', role: 'Kasir', pin: '4444', is_active: true, created_at: now() },
-  { id: 'usr_kasir2', name: 'Nawir Kasir', role_id: 'role_kasir', role: 'Kasir', pin: '5555', is_active: true, created_at: now() }
+  {
+    id: 'usr_owner',
+    name: 'Roid Owner',
+    role_id: 'role_owner',
+    role: 'Owner',
+    pin: '1111',
+    phone: '08123456789',
+    email: 'roid@kastur.local',
+    position_title: 'Owner Kastur',
+    profile_note: 'Pemilik dengan akses penuh seluruh modul dan pengaturan permission.',
+    is_active: true,
+    created_at: now()
+  },
+  {
+    id: 'usr_admin',
+    name: 'Nawir Admin',
+    role_id: 'role_admin',
+    role: 'Admin',
+    pin: '2222',
+    phone: '08123456790',
+    email: 'nawir@kastur.local',
+    position_title: 'Admin Operasional',
+    profile_note: 'Mengelola katalog, stok, laporan, sinkronisasi, dan pengaturan operasional.',
+    is_active: true,
+    created_at: now()
+  },
+  {
+    id: 'usr_spv',
+    name: 'Kastur Supervisor',
+    role_id: 'role_supervisor',
+    role: 'Supervisor',
+    pin: '3333',
+    phone: '08123456791',
+    email: 'supervisor@kastur.local',
+    position_title: 'Supervisor Kasir',
+    profile_note: 'Mengawasi shift, diskon, laporan, dan proses kasir harian.',
+    is_active: true,
+    created_at: now()
+  },
+  {
+    id: 'usr_kasir1',
+    name: 'Roid Kasir',
+    role_id: 'role_kasir',
+    role: 'Kasir',
+    pin: '4444',
+    phone: '08123456792',
+    email: 'kasir.roid@kastur.local',
+    position_title: 'Kasir',
+    profile_note: 'Menangani transaksi, pelanggan, shift, dan cetak struk.',
+    is_active: true,
+    created_at: now()
+  },
+  {
+    id: 'usr_kasir2',
+    name: 'Nawir Kasir',
+    role_id: 'role_kasir',
+    role: 'Kasir',
+    pin: '5555',
+    phone: '08123456793',
+    email: 'kasir.nawir@kastur.local',
+    position_title: 'Kasir',
+    profile_note: 'Menangani transaksi, pelanggan, shift, dan cetak struk.',
+    is_active: true,
+    created_at: now()
+  }
 ];
 
 const DEFAULT_OUTLET: Outlet = {
@@ -377,6 +443,14 @@ export async function initializeDatabase() {
 
     if ((await db.roles.count()) === 0) {
       await db.roles.bulkPut(DEFAULT_ROLES);
+    } else {
+      const ownerRole = await db.roles.get('role_owner');
+      if (ownerRole && !hasAllOwnerPermissions(ownerRole.permissions)) {
+        await db.roles.update('role_owner', {
+          permissions: ownerPermissions,
+          description: DEFAULT_ROLES.find((role) => role.id === 'role_owner')?.description || ownerRole.description
+        });
+      }
     }
 
     if ((await db.users.count()) === 0) {
@@ -385,7 +459,20 @@ export async function initializeDatabase() {
       for (const defaultUser of DEFAULT_USERS) {
         const currentUser = await db.users.get(defaultUser.id);
         if (currentUser?.name === LEGACY_DEFAULT_USER_NAMES[defaultUser.id]) {
-          await db.users.update(defaultUser.id, { name: defaultUser.name });
+          await db.users.update(defaultUser.id, {
+            name: defaultUser.name,
+            phone: defaultUser.phone,
+            email: defaultUser.email,
+            position_title: defaultUser.position_title,
+            profile_note: defaultUser.profile_note
+          });
+        } else if (currentUser && !currentUser.position_title && !currentUser.profile_note && !currentUser.phone && !currentUser.email) {
+          await db.users.update(defaultUser.id, {
+            phone: defaultUser.phone,
+            email: defaultUser.email,
+            position_title: defaultUser.position_title,
+            profile_note: defaultUser.profile_note
+          });
         }
       }
     }

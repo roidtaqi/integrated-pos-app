@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Settings,
   ShoppingCart,
+  UserRound,
   Users,
   Wifi,
   WifiOff
@@ -28,7 +29,7 @@ const navItems: {
   name: string;
   path: string;
   icon: typeof LayoutDashboard;
-  permission: PermissionCode;
+  permission?: PermissionCode;
 }[] = [
   { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard, permission: 'dashboard:view' },
   { name: 'Kasir', path: '/pos', icon: ShoppingCart, permission: 'pos:use' },
@@ -38,7 +39,8 @@ const navItems: {
   { name: 'Laporan', path: '/reports', icon: BarChart3, permission: 'reports:view' },
   { name: 'Pelanggan', path: '/customers', icon: Users, permission: 'customers:manage' },
   { name: 'Sinkronisasi', path: '/sync', icon: RefreshCw, permission: 'sync:manage' },
-  { name: 'Pengaturan', path: '/settings', icon: Settings, permission: 'settings:manage' }
+  { name: 'Pengaturan', path: '/settings', icon: Settings, permission: 'settings:manage' },
+  { name: 'Profil', path: '/profile', icon: UserRound }
 ];
 
 export default function Layout() {
@@ -57,9 +59,14 @@ export default function Layout() {
   }, []);
 
   const allowedNav = useMemo(
-    () => navItems.filter((item) => authService.can(user, item.permission)),
+    () => navItems.filter((item) => !item.permission || authService.can(user, item.permission)),
     [user]
   );
+  const mobileNav = useMemo(() => {
+    const profileItem = allowedNav.find((item) => item.path === '/profile');
+    const primaryItems = allowedNav.filter((item) => item.path !== '/profile').slice(0, 4);
+    return profileItem ? [...primaryItems, profileItem] : primaryItems;
+  }, [allowedNav]);
 
   const handleLogout = () => {
     toast((t) => (
@@ -124,7 +131,11 @@ export default function Layout() {
             {isOnline ? <Wifi size={16} /> : <WifiOff size={16} />}
             {isOnline ? 'Online' : 'Offline'} · transaksi tetap lokal
           </div>
-          <div className="flex items-center gap-3 px-3 py-2">
+          <button
+            type="button"
+            onClick={() => navigate('/profile')}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50"
+          >
             <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-sm">
               {user?.name?.charAt(0) || 'U'}
             </div>
@@ -132,12 +143,15 @@ export default function Layout() {
               <p className="text-sm font-medium text-slate-900 truncate">{user?.name || 'Unknown'}</p>
               <p className="text-xs text-slate-500 truncate">{user?.role || 'Staff'}</p>
             </div>
+          </button>
+          <div className="px-3">
             <button
               onClick={handleLogout}
-              className="p-2 text-slate-400 hover:text-danger hover:bg-danger/10 rounded-lg transition-colors"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-danger/10 hover:text-danger"
               title="Keluar"
             >
               <LogOut size={18} />
+              Keluar
             </button>
           </div>
         </div>
@@ -149,7 +163,7 @@ export default function Layout() {
 
       <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200">
         <div className="grid grid-cols-5">
-          {allowedNav.slice(0, 5).map((item) => (
+          {mobileNav.map((item) => (
             <NavLink
               key={item.name}
               to={item.path}

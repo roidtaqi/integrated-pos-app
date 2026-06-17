@@ -61,6 +61,22 @@ export const authService = {
     }
   },
 
+  async refreshCurrentUser() {
+    const currentUser = this.getCurrentUser();
+    if (!currentUser) return null;
+
+    const user = await db.users.get(currentUser.id);
+    if (!user || !user.is_active) {
+      this.logout();
+      return null;
+    }
+
+    const role = await db.roles.get(user.role_id);
+    const sessionUser = toSessionUser(user, role?.permissions || []);
+    localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser));
+    return sessionUser;
+  },
+
   hasPermission(permission: PermissionCode) {
     const user = this.getCurrentUser();
     return Boolean(user?.permissions.includes(permission));
