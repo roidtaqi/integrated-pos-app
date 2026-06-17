@@ -36,7 +36,6 @@ export default function More() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-bold text-slate-900">{item.name}</div>
-                <div className="text-xs text-slate-500">{item.path}</div>
               </div>
               <ChevronRight size={20} className="shrink-0 text-slate-400" />
             </NavLink>
