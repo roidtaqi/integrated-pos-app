@@ -38,6 +38,90 @@ npm run build
 npm run preview
 ```
 
+## Deploy ke Railway
+
+Inventory Pricing App sudah bisa berjalan sendiri di Railway, misalnya:
+
+```txt
+https://calc-kastur.up.railway.app/
+```
+
+Untuk melengkapi suite ini, deploy dua service dari repo `integrated-pos-app`:
+
+- `integrated-pos-app` untuk frontend POS.
+- `integrated-pos-sync-server` untuk WebSocket sync antara Inventory dan POS.
+
+### Service 1 - Integrated POS App
+
+1. Buka Railway project yang ingin dipakai.
+2. Pilih `New -> GitHub Repo`.
+3. Pilih repo `roidtaqi/integrated-pos-app`.
+4. Gunakan Dockerfile default:
+
+```txt
+Dockerfile
+```
+
+5. Generate domain Railway untuk service POS.
+
+Service ini memakai Caddy dan otomatis fallback ke `index.html`, jadi refresh route seperti `/pos`, `/sync`, dan `/reports` tetap aman.
+
+### Service 2 - Integrated POS Sync Server
+
+1. Di project Railway yang sama, pilih `New -> GitHub Repo`.
+2. Pilih repo `roidtaqi/integrated-pos-app` lagi.
+3. Pada service settings, set Dockerfile path menjadi:
+
+```txt
+sync-server/Dockerfile
+```
+
+4. Generate domain Railway untuk service sync server.
+5. Buka URL `/health` untuk memastikan service hidup.
+
+Contoh:
+
+```txt
+https://integrated-pos-sync-server.up.railway.app/health
+```
+
+Jika response berisi `ok: true`, WebSocket server sudah siap.
+
+### URL Sync yang Dipakai di Aplikasi
+
+Karena Inventory dan POS berjalan di HTTPS, URL sync harus memakai `wss://`, bukan `ws://`.
+
+Contoh:
+
+```txt
+wss://integrated-pos-sync-server.up.railway.app
+```
+
+Masukkan URL tersebut di:
+
+- Inventory Pricing App: `Home -> Data & Pengaturan -> Sync`.
+- Integrated POS App: `Sinkronisasi -> Real-time Sync`.
+
+Setelah kedua aplikasi tersambung:
+
+1. Dari Inventory, klik `Publish Catalog Sekarang`.
+2. Dari POS, buka `Sinkronisasi` dan pastikan status `CONNECTED`.
+3. Transaksi POS baru akan dikirim ke sync server dan diterima Inventory.
+
+### Optional - Railway Volume
+
+Sync server menyimpan state ke file `realtime-sync-state.json`. Untuk demo singkat, storage container biasa sudah cukup. Jika ingin state lebih awet, tambahkan Railway Volume pada service sync server dan set environment variable:
+
+```txt
+SYNC_DATA_DIR=/data
+```
+
+Lalu mount volume ke:
+
+```txt
+/data
+```
+
 ## Deploy Gratis ke Render
 
 Repo ini menyediakan `render.yaml` untuk deploy tiga service sekaligus:
