@@ -1,0 +1,361 @@
+{
+  "exportedAt": "2026-06-17T06:40:57.743Z",
+  "categories": [
+    {
+      "name": "Mie Instan",
+      "isActive": true,
+      "id": 1
+    },
+    {
+      "name": "Minuman",
+      "isActive": true,
+      "id": 2
+    },
+    {
+      "name": "Beras",
+      "isActive": true,
+      "id": 3
+    },
+    {
+      "name": "Minyak",
+      "isActive": true,
+      "id": 4
+    },
+    {
+      "name": "Gula",
+      "isActive": true,
+      "id": 5
+    },
+    {
+      "name": "Rokok",
+      "isActive": true,
+      "id": 6
+    },
+    {
+      "name": "Telur",
+      "isActive": true,
+      "id": 7
+    },
+    {
+      "name": "Bumbu Dapur",
+      "isActive": true,
+      "id": 8
+    }
+  ],
+  "brands": [
+    {
+      "name": "Indomie",
+      "isActive": true,
+      "id": 1
+    },
+    {
+      "name": "Sedaap",
+      "isActive": true,
+      "id": 2
+    },
+    {
+      "name": "Aqua",
+      "isActive": true,
+      "id": 3
+    },
+    {
+      "name": "Sania",
+      "isActive": true,
+      "id": 4
+    },
+    {
+      "name": "Rose Brand",
+      "isActive": true,
+      "id": 5
+    }
+  ],
+  "suppliers": [
+    {
+      "name": "Supplier Utama",
+      "isActive": true,
+      "id": 1
+    },
+    {
+      "name": "Supplier Grosir A",
+      "isActive": true,
+      "id": 2
+    },
+    {
+      "name": "Supplier Pasar",
+      "isActive": true,
+      "id": 3
+    }
+  ],
+  "products": [
+    {
+      "id": "prod-aqua-600ml",
+      "sku": "SKU-003",
+      "name": "Aqua 600ml",
+      "categoryId": 2,
+      "brandId": 3,
+      "supplierId": 1,
+      "barcode": "8992761111016",
+      "pricingMode": "AUTO_MARGIN",
+      "isActive": true
+    },
+    {
+      "id": "prod-beras-ramos-5kg",
+      "sku": "SKU-004",
+      "name": "Beras Ramos 5kg",
+      "categoryId": 3,
+      "supplierId": 2,
+      "pricingMode": "MANUAL_PRICE",
+      "isActive": true
+    },
+    {
+      "id": "prod-gula-pasir-1kg",
+      "sku": "SKU-006",
+      "name": "Gula Pasir 1kg",
+      "categoryId": 5,
+      "brandId": 5,
+      "supplierId": 2,
+      "pricingMode": "AUTO_MARGIN",
+      "isActive": true
+    },
+    {
+      "id": "prod-indomie-goreng",
+      "sku": "SKU-001",
+      "name": "Indomie Goreng",
+      "categoryId": 1,
+      "brandId": 1,
+      "supplierId": 1,
+      "pricingMode": "AUTO_MARGIN",
+      "isActive": true
+    },
+    {
+      "id": "prod-mie-sedaap-soto",
+      "sku": "SKU-002",
+      "name": "Mie Sedaap Soto",
+      "categoryId": 1,
+      "brandId": 2,
+      "supplierId": 2,
+      "pricingMode": "AUTO_MARGIN",
+      "isActive": true
+    },
+    {
+      "id": "prod-minyak-goreng-1l",
+      "sku": "SKU-005",
+      "name": "Minyak Goreng 1L",
+      "categoryId": 4,
+      "brandId": 4,
+      "supplierId": 1,
+      "pricingMode": "AUTO_MARGIN",
+      "isActive": true
+    },
+    {
+      "id": "prod-telur-ayam-1kg",
+      "sku": "SKU-007",
+      "name": "Telur Ayam 1kg",
+      "categoryId": 7,
+      "supplierId": 3,
+      "pricingMode": "LOCKED_PRICE",
+      "isActive": true,
+      "notes": "Harga pasar harian"
+    }
+  ],
+  "productUnits": [
+    {
+      "id": "unit-aqua-pcs",
+      "productId": "prod-aqua-600ml",
+      "unitName": "botol",
+      "conversionToBase": 1,
+      "manualCost": 2500,
+      "activeSellingPrice": 3000,
+      "minSellingPrice": 3000,
+      "maxSellingPrice": 4500
+    },
+    {
+      "id": "unit-beras-5kg",
+      "productId": "prod-beras-ramos-5kg",
+      "unitName": "pack",
+      "conversionToBase": 5,
+      "manualCost": 62000,
+      "activeSellingPrice": 68000,
+      "minSellingPrice": 65000,
+      "maxSellingPrice": 76000
+    },
+    {
+      "id": "unit-gula-1kg",
+      "productId": "prod-gula-pasir-1kg",
+      "unitName": "pack",
+      "conversionToBase": 1,
+      "manualCost": 15500,
+      "activeSellingPrice": 17500,
+      "minSellingPrice": 16500,
+      "maxSellingPrice": 19500
+    },
+    {
+      "id": "unit-indomie-dus",
+      "productId": "prod-indomie-goreng",
+      "unitName": "dus",
+      "conversionToBase": 40,
+      "manualCost": 110000,
+      "activeSellingPrice": 125000,
+      "minSellingPrice": 115000,
+      "maxSellingPrice": 145000
+    },
+    {
+      "id": "unit-indomie-pcs",
+      "productId": "prod-indomie-goreng",
+      "unitName": "pcs",
+      "conversionToBase": 1,
+      "manualCost": 2800,
+      "activeSellingPrice": 3500,
+      "minSellingPrice": 3000,
+      "maxSellingPrice": 5000
+    },
+    {
+      "id": "unit-minyak-1l",
+      "productId": "prod-minyak-goreng-1l",
+      "unitName": "botol",
+      "conversionToBase": 1,
+      "manualCost": 14500,
+      "activeSellingPrice": 16000,
+      "minSellingPrice": 15000,
+      "maxSellingPrice": 18500
+    },
+    {
+      "id": "unit-sedaap-pcs",
+      "productId": "prod-mie-sedaap-soto",
+      "unitName": "pcs",
+      "conversionToBase": 1,
+      "manualCost": 2700,
+      "activeSellingPrice": 3500,
+      "minSellingPrice": 3000,
+      "maxSellingPrice": 5000
+    },
+    {
+      "id": "unit-telur-1kg",
+      "productId": "prod-telur-ayam-1kg",
+      "unitName": "kg",
+      "conversionToBase": 1,
+      "manualCost": 27000,
+      "activeSellingPrice": 30000,
+      "minSellingPrice": 28500,
+      "maxSellingPrice": 34000
+    }
+  ],
+  "marginRules": [
+    {
+      "id": "rule-cat-beras",
+      "ruleType": "CATEGORY",
+      "referenceId": "3",
+      "marginPercent": 6,
+      "priority": 4,
+      "isActive": true
+    },
+    {
+      "id": "rule-cat-mie",
+      "ruleType": "CATEGORY",
+      "referenceId": "1",
+      "marginPercent": 10,
+      "priority": 4,
+      "isActive": true
+    },
+    {
+      "id": "rule-cat-minuman",
+      "ruleType": "CATEGORY",
+      "referenceId": "2",
+      "marginPercent": 15,
+      "priority": 4,
+      "isActive": true
+    },
+    {
+      "id": "rule-cat-minyak",
+      "ruleType": "CATEGORY",
+      "referenceId": "4",
+      "marginPercent": 7,
+      "priority": 4,
+      "isActive": true
+    },
+    {
+      "id": "rule-cat-rokok",
+      "ruleType": "CATEGORY",
+      "referenceId": "6",
+      "marginPercent": 5,
+      "priority": 4,
+      "isActive": true
+    },
+    {
+      "id": "rule-default",
+      "ruleType": "STORE_DEFAULT",
+      "marginPercent": 15,
+      "priority": 5,
+      "isActive": true
+    }
+  ],
+  "priceCalculations": [
+    {
+      "id": "bb99deb1-0a33-4114-bba7-20d0135afb8d",
+      "productId": "prod-aqua-600ml",
+      "productUnitId": "unit-aqua-pcs",
+      "inputCost": 2500,
+      "ppnMode": "NO_PPN",
+      "ppnRate": 11,
+      "baseCost": 2500,
+      "ppnAmount": 0,
+      "finalCost": 2500,
+      "marginPercent": 15,
+      "calculatedPrice": 2941.1764705882356,
+      "roundedPrice": 3000,
+      "recommendedPrice": 2941.1764705882356,
+      "estimatedProfit": 500,
+      "actualMargin": 16.666666666666664,
+      "minPrice": 3000,
+      "maxPrice": 4500,
+      "status": "ACTIVE",
+      "effectiveDate": "2026-06-12",
+      "createdBy": "Admin Lokal",
+      "createdAt": 1781269483370,
+      "updatedAt": 1781269499097,
+      "approvedBy": "Owner Lokal",
+      "approvedAt": 1781269499097
+    }
+  ],
+  "priceHistories": [
+    {
+      "id": "8deeec15-324e-4b16-a207-332c2ffe5529",
+      "productId": "prod-aqua-600ml",
+      "productUnitId": "unit-aqua-pcs",
+      "oldCost": 2500,
+      "newCost": 2500,
+      "oldPrice": 3500,
+      "newPrice": 3000,
+      "oldMargin": 0,
+      "newMargin": 15,
+      "oldPpnMode": "NO_PPN",
+      "newPpnMode": "NO_PPN",
+      "oldPpnAmount": 0,
+      "newPpnAmount": 0,
+      "pricingMode": "AUTO_MARGIN",
+      "effectiveDate": "2026-06-12",
+      "changedBy": "Admin Lokal",
+      "approvedBy": "Owner Lokal",
+      "approvedAt": 1781269499097,
+      "createdAt": 1781269499104
+    }
+  ],
+  "appSettings": [
+    {
+      "key": "appName",
+      "value": "Kalkulator Tekad Mandiri"
+    },
+    {
+      "key": "currencyFormat",
+      "value": "IDR"
+    },
+    {
+      "key": "defaultPpnRate",
+      "value": "11"
+    },
+    {
+      "key": "roundingMode",
+      "value": "NEAREST_THOUSAND_500_THRESHOLD"
+    }
+  ]
+}
