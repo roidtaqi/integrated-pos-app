@@ -11,6 +11,7 @@
     "sync:server": "node sync-server/server.mjs"
   },
   "dependencies": {
+    "@zxing/browser": "^0.1.5",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "dexie": "^4.4.4",

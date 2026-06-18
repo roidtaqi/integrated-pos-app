@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Banknote,
+  Camera,
   ChevronDown,
   CreditCard,
   Package,
@@ -44,6 +45,10 @@ const paymentMethods: { method: PaymentMethod; label: string; icon: typeof Bankn
   { method: 'edc', label: 'EDC', icon: CreditCard, className: 'bg-amber-50 text-amber-700 border-amber-200' }
 ];
 
+const CameraBarcodeScanner = lazy(() =>
+  import('../components/CameraBarcodeScanner').then((module) => ({ default: module.CameraBarcodeScanner }))
+);
+
 export default function POS() {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -55,11 +60,14 @@ export default function POS() {
   const [paymentSplits, setPaymentSplits] = useState<{ method: PaymentMethod; amount: number }[]>([]);
   const [transactionDiscount, setTransactionDiscount] = useState(0);
   const [showReceiptDialog, setShowReceiptDialog] = useState(false);
+  const [showCameraScanner, setShowCameraScanner] = useState(false);
   const [lastReceipt, setLastReceipt] = useState<ReceiptProps | null>(null);
 
   const receiptRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cartClosedByUserRef = useRef(false);
+  const scannerBufferRef = useRef('');
+  const lastScannerKeyAtRef = useRef(0);
   const user = authService.getCurrentUser();
   const canDiscount = authService.hasPermission('discount:apply');
   const liveProducts = useLiveQuery(() => productService.getActiveProductsWithUnits(), []);
@@ -97,7 +105,7 @@ export default function POS() {
   const totalPaidSoFar = paymentSplits.reduce((sum, payment) => sum + payment.amount, 0);
   const remainingToPay = Math.max(0, total - totalPaidSoFar);
 
-  const addToCart = (product: ProductWithUnits, unit = product.defaultUnit) => {
+  const addToCart = useCallback((product: ProductWithUnits, unit = product.defaultUnit) => {
     setCart((previousCart) => {
       const existing = previousCart.find((item) => item.product_id === product.id && item.unit_id === unit.id);
       if (existing) {
@@ -128,19 +136,68 @@ export default function POS() {
     if (!cartClosedByUserRef.current) {
       setIsCartOpen(true);
     }
-  };
+  }, []);
 
-  const handleSearchEnter = async () => {
-    const query = searchQuery.trim();
-    if (!query) return;
+  const addBarcodeToCart = useCallback(async (barcode: string, source: 'manual' | 'laser' | 'camera' = 'manual', showError = true) => {
+    const query = barcode.trim();
+    if (!query) return false;
 
     const productByBarcode = await productService.findByBarcode(query);
     if (productByBarcode) {
       addToCart(productByBarcode);
       setSearchQuery('');
       toast.success(`${productByBarcode.name} ditambahkan`);
-      return;
+      return true;
     }
+
+    if (showError) {
+      setSearchQuery(query);
+      searchInputRef.current?.focus();
+      toast.error(source === 'manual' ? 'Produk tidak ditemukan.' : `Barcode ${query} tidak terdaftar.`);
+    }
+    return false;
+  }, [addToCart]);
+
+  useEffect(() => {
+    const handleScannerKeyDown = (event: KeyboardEvent) => {
+      if (paymentModal || showReceiptDialog || showCameraScanner) return;
+
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName;
+      const isEditable = target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+      if (isEditable) return;
+
+      const now = Date.now();
+      if (now - lastScannerKeyAtRef.current > 80) {
+        scannerBufferRef.current = '';
+      }
+
+      if (event.key === 'Enter') {
+        const barcode = scannerBufferRef.current.trim();
+        scannerBufferRef.current = '';
+        if (barcode.length >= 3) {
+          event.preventDefault();
+          void addBarcodeToCart(barcode, 'laser');
+        }
+        return;
+      }
+
+      if (event.key.length === 1) {
+        scannerBufferRef.current += event.key;
+        lastScannerKeyAtRef.current = now;
+      }
+    };
+
+    window.addEventListener('keydown', handleScannerKeyDown);
+    return () => window.removeEventListener('keydown', handleScannerKeyDown);
+  }, [addBarcodeToCart, paymentModal, showCameraScanner, showReceiptDialog]);
+
+  const handleSearchEnter = async () => {
+    const query = searchQuery.trim();
+    if (!query) return;
+
+    const barcodeAdded = await addBarcodeToCart(query, 'manual', false);
+    if (barcodeAdded) return;
 
     if (filteredProducts.length === 1) {
       addToCart(filteredProducts[0]);
@@ -335,6 +392,13 @@ export default function POS() {
               title="Scan / tambah produk"
             >
               <ScanLine size={24} />
+            </button>
+            <button
+              onClick={() => setShowCameraScanner(true)}
+              className="p-3 bg-primary-50 text-primary-700 rounded-xl hover:bg-primary-100 transition-colors active:bg-primary-200"
+              title="Scan barcode dengan kamera"
+            >
+              <Camera size={24} />
             </button>
           </div>
         </div>
@@ -673,6 +737,21 @@ export default function POS() {
             </div>
           </div>
         </div>
+      )}
+
+      {showCameraScanner && (
+        <Suspense
+          fallback={
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/80 p-4 text-sm font-bold text-white">
+              Membuka kamera...
+            </div>
+          }
+        >
+          <CameraBarcodeScanner
+            onClose={() => setShowCameraScanner(false)}
+            onDetected={(barcode) => addBarcodeToCart(barcode, 'camera')}
+          />
+        </Suspense>
       )}
     </div>
   );
