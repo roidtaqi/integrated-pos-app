@@ -70,6 +70,7 @@ export default function POS() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const transactionDiscountInputRef = useRef<HTMLInputElement>(null);
   const paymentAmountInputRef = useRef<HTMLInputElement>(null);
+  const cartItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const cartClosedByUserRef = useRef(false);
   const scannerBufferRef = useRef('');
   const lastScannerKeyAtRef = useRef(0);
@@ -115,6 +116,19 @@ export default function POS() {
   const totalPaidSoFar = paymentSplits.reduce((sum, payment) => sum + payment.amount, 0);
   const remainingToPay = Math.max(0, total - totalPaidSoFar);
   const activeCartIndex = cart.length > 0 ? Math.min(selectedCartIndex, cart.length - 1) : 0;
+  const activeCartItemKey = cart[activeCartIndex] ? `${cart[activeCartIndex].product_id}-${cart[activeCartIndex].unit_id}` : '';
+
+  useEffect(() => {
+    if (!isCartOpen && window.innerWidth < 1024) return;
+
+    const element = cartItemRefs.current[activeCartItemKey];
+    if (!element) return;
+
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest'
+    });
+  }, [activeCartItemKey, isCartOpen]);
 
   const addToCart = useCallback((product: ProductWithUnits, unit = product.defaultUnit) => {
     setCart((previousCart) => {
@@ -694,6 +708,9 @@ export default function POS() {
             cart.map((item, index) => (
               <div
                 key={`${item.product_id}-${item.unit_id}`}
+                ref={(element) => {
+                  cartItemRefs.current[`${item.product_id}-${item.unit_id}`] = element;
+                }}
                 onClick={() => setSelectedCartIndex(index)}
                 className={`bg-white p-4 rounded-xl border shadow-sm space-y-3 transition ${
                   index === activeCartIndex
