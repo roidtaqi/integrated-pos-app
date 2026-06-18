@@ -40,17 +40,17 @@ export function CameraBarcodeScanner({ onClose, onDetected }: CameraBarcodeScann
         controlsRef.current?.stop();
         controlsRef.current = null;
 
-        const videoInputDevices = await BrowserCodeReader.listVideoInputDevices();
+        let videoInputDevices: MediaDeviceInfo[] = [];
+        try {
+          videoInputDevices = await BrowserCodeReader.listVideoInputDevices();
+        } catch {
+          videoInputDevices = [];
+        }
         if (cancelled) return;
 
         setDevices(videoInputDevices);
         const deviceId = selectedDeviceId || getPreferredCameraId(videoInputDevices);
-        if (!deviceId) {
-          setScannerError('Kamera tidak ditemukan.');
-          return;
-        }
-
-        const controls = await reader.decodeFromVideoDevice(deviceId, videoRef.current || undefined, (result, _error, scannerControls) => {
+        const handleResult = (result: { getText: () => string } | undefined, scannerControls: IScannerControls) => {
           if (!result) return;
 
           const text = result.getText().trim();
@@ -64,7 +64,28 @@ export function CameraBarcodeScanner({ onClose, onDetected }: CameraBarcodeScann
               onCloseRef.current();
             }
           });
-        });
+        };
+
+        const controls = deviceId
+          ? await reader.decodeFromVideoDevice(deviceId, videoRef.current || undefined, (result, _error, scannerControls) => {
+              handleResult(result, scannerControls);
+            })
+          : await reader.decodeFromConstraints({
+              audio: false,
+              video: {
+                facingMode: { ideal: 'environment' }
+              }
+            }, videoRef.current || undefined, (result, _error, scannerControls) => {
+              handleResult(result, scannerControls);
+            });
+
+        if (!videoInputDevices.length) {
+          void BrowserCodeReader.listVideoInputDevices()
+            .then((nextDevices) => {
+              if (!cancelled) setDevices(nextDevices);
+            })
+            .catch(() => undefined);
+        }
 
         if (cancelled) {
           controls.stop();
@@ -75,7 +96,7 @@ export function CameraBarcodeScanner({ onClose, onDetected }: CameraBarcodeScann
       } catch (error) {
         if (!cancelled) {
           console.error(error);
-          setScannerError('Kamera tidak bisa dibuka. Periksa izin kamera browser.');
+          setScannerError('Kamera tidak bisa dibuka. Pastikan izin kamera di browser sudah diizinkan.');
         }
       }
     }
