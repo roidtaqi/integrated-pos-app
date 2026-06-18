@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { BrowserCodeReader, BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
+import { BrowserCodeReader, BrowserMultiFormatOneDReader, BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser';
 import { Camera, X } from 'lucide-react';
 
 interface CameraBarcodeScannerProps {
@@ -32,7 +32,8 @@ export function CameraBarcodeScanner({ onClose, onDetected }: CameraBarcodeScann
 
   useEffect(() => {
     let cancelled = false;
-    const reader = new BrowserMultiFormatReader();
+    const reader = new BrowserMultiFormatOneDReader();
+    const fallbackReader = new BrowserMultiFormatReader();
 
     async function startScanner() {
       try {
@@ -66,18 +67,28 @@ export function CameraBarcodeScanner({ onClose, onDetected }: CameraBarcodeScann
           });
         };
 
-        const controls = deviceId
-          ? await reader.decodeFromVideoDevice(deviceId, videoRef.current || undefined, (result, _error, scannerControls) => {
-              handleResult(result, scannerControls);
-            })
-          : await reader.decodeFromConstraints({
-              audio: false,
-              video: {
-                facingMode: { ideal: 'environment' }
-              }
-            }, videoRef.current || undefined, (result, _error, scannerControls) => {
-              handleResult(result, scannerControls);
-            });
+        const decodeCallback = (result: { getText: () => string } | undefined, _error: unknown, scannerControls: IScannerControls) => {
+          handleResult(result, scannerControls);
+        };
+        const constraints: MediaStreamConstraints = {
+          audio: false,
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+
+        let controls: IScannerControls;
+        try {
+          controls = deviceId
+            ? await reader.decodeFromVideoDevice(deviceId, videoRef.current || undefined, decodeCallback)
+            : await reader.decodeFromConstraints(constraints, videoRef.current || undefined, decodeCallback);
+        } catch {
+          controls = deviceId
+            ? await fallbackReader.decodeFromVideoDevice(deviceId, videoRef.current || undefined, decodeCallback)
+            : await fallbackReader.decodeFromConstraints(constraints, videoRef.current || undefined, decodeCallback);
+        }
 
         if (!videoInputDevices.length) {
           void BrowserCodeReader.listVideoInputDevices()
@@ -136,11 +147,16 @@ export function CameraBarcodeScanner({ onClose, onDetected }: CameraBarcodeScann
         <div className="bg-slate-950 p-3">
           <div className="relative overflow-hidden rounded-2xl bg-black">
             <video ref={videoRef} className="aspect-[4/3] w-full object-cover" muted playsInline />
-            <div className="pointer-events-none absolute inset-x-10 top-1/2 h-24 -translate-y-1/2 rounded-2xl border-2 border-emerald-400/90 shadow-[0_0_0_999px_rgba(2,6,23,0.38)]" />
+            <div className="pointer-events-none absolute inset-x-5 top-1/2 h-20 -translate-y-1/2 rounded-xl border-2 border-emerald-400/90 shadow-[0_0_0_999px_rgba(2,6,23,0.38)]" />
+            <div className="pointer-events-none absolute inset-x-10 top-1/2 h-0.5 -translate-y-1/2 bg-emerald-300/90" />
           </div>
         </div>
 
         <div className="space-y-3 p-4">
+          <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm font-medium text-slate-600">
+            Arahkan kode batang secara horizontal di dalam kotak hijau. Dekatkan kamera sampai garis barcode terlihat tajam.
+          </p>
+
           {devices.length > 1 && (
             <select
               value={selectedDeviceId}
