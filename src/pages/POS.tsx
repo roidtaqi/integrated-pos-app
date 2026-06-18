@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Banknote,
   Camera,
@@ -50,8 +51,10 @@ const CameraBarcodeScanner = lazy(() =>
 );
 
 export default function POS() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [selectedCartIndex, setSelectedCartIndex] = useState(0);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentModal, setPaymentModal] = useState(false);
@@ -65,6 +68,8 @@ export default function POS() {
 
   const receiptRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const transactionDiscountInputRef = useRef<HTMLInputElement>(null);
+  const paymentAmountInputRef = useRef<HTMLInputElement>(null);
   const cartClosedByUserRef = useRef(false);
   const scannerBufferRef = useRef('');
   const lastScannerKeyAtRef = useRef(0);
@@ -82,6 +87,11 @@ export default function POS() {
   useEffect(() => {
     searchInputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    if (!paymentModal) return;
+    window.setTimeout(() => paymentAmountInputRef.current?.focus(), 0);
+  }, [paymentModal]);
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -104,19 +114,22 @@ export default function POS() {
   const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
   const totalPaidSoFar = paymentSplits.reduce((sum, payment) => sum + payment.amount, 0);
   const remainingToPay = Math.max(0, total - totalPaidSoFar);
+  const activeCartIndex = cart.length > 0 ? Math.min(selectedCartIndex, cart.length - 1) : 0;
 
   const addToCart = useCallback((product: ProductWithUnits, unit = product.defaultUnit) => {
     setCart((previousCart) => {
       const existing = previousCart.find((item) => item.product_id === product.id && item.unit_id === unit.id);
       if (existing) {
-        return previousCart.map((item) =>
+        const nextCart = previousCart.map((item) =>
           item.product_id === product.id && item.unit_id === unit.id
             ? { ...item, qty: item.qty + 1 }
             : item
         );
+        setSelectedCartIndex(nextCart.findIndex((item) => item.product_id === product.id && item.unit_id === unit.id));
+        return nextCart;
       }
 
-      return [
+      const nextCart = [
         ...previousCart,
         {
           product_id: product.id,
@@ -131,6 +144,8 @@ export default function POS() {
           stock_qty: product.stock_qty
         }
       ];
+      setSelectedCartIndex(nextCart.length - 1);
+      return nextCart;
     });
 
     if (!cartClosedByUserRef.current) {
@@ -208,12 +223,12 @@ export default function POS() {
     toast.error('Produk tidak ditemukan atau hasil pencarian masih lebih dari satu.');
   };
 
-  const updateQty = (productId: string, unitId: string, delta: number) => {
+  const updateQty = useCallback((productId: string, unitId: string, delta: number) => {
     setCart((previousCart) => previousCart.map((item) => {
       if (item.product_id !== productId || item.unit_id !== unitId) return item;
       return { ...item, qty: Math.max(1, item.qty + delta) };
     }));
-  };
+  }, []);
 
   const updateUnit = (productId: string, currentUnitId: string, nextUnitId: string) => {
     setCart((previousCart) => previousCart.map((item) => {
@@ -239,29 +254,29 @@ export default function POS() {
     }));
   };
 
-  const removeItem = (productId: string, unitId: string) => {
+  const removeItem = useCallback((productId: string, unitId: string) => {
     setCart((previousCart) => previousCart.filter((item) => item.product_id !== productId || item.unit_id !== unitId));
-  };
+  }, []);
 
-  const clearCart = () => {
+  const clearCart = useCallback(() => {
     setCart([]);
     setTransactionDiscount(0);
     setPaymentSplits([]);
     setIsCartOpen(false);
     cartClosedByUserRef.current = false;
-  };
+  }, []);
 
   const openCart = () => {
     setIsCartOpen(true);
     cartClosedByUserRef.current = false;
   };
 
-  const closeCart = () => {
+  const closeCart = useCallback(() => {
     setIsCartOpen(false);
     cartClosedByUserRef.current = true;
-  };
+  }, []);
 
-  const initiateCheckout = async () => {
+  const initiateCheckout = useCallback(async () => {
     if (cart.length === 0) return;
     if (!user) {
       toast.error('Sesi telah habis, silakan login kembali.');
@@ -278,7 +293,7 @@ export default function POS() {
     setInputAmount(total.toString());
     setSelectedMethod('cash');
     setPaymentModal(true);
-  };
+  }, [cart.length, total, user]);
 
   const handleAddPayment = () => {
     const amount = Number(inputAmount);
@@ -292,7 +307,7 @@ export default function POS() {
     setInputAmount(newPaid < total ? String(total - newPaid) : '');
   };
 
-  const processTransaction = async () => {
+  const processTransaction = useCallback(async () => {
     if (cart.length === 0 || !user) return;
 
     let finalPayments = [...paymentSplits];
@@ -365,7 +380,169 @@ export default function POS() {
       setIsProcessing(false);
       searchInputRef.current?.focus();
     }
-  };
+  }, [cart, clearCart, inputAmount, paymentSplits, sanitizedTransactionDiscount, selectedMethod, settings, total, user]);
+
+  useEffect(() => {
+    const isTypingTarget = (target: EventTarget | null) => {
+      const element = target as HTMLElement | null;
+      if (!element) return false;
+      const tagName = element.tagName;
+      return element.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT';
+    };
+
+    const handleShortcutKeyDown = (event: KeyboardEvent) => {
+      if (showCameraScanner) return;
+
+      const typing = isTypingTarget(event.target);
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (paymentModal) {
+          setPaymentModal(false);
+          searchInputRef.current?.focus();
+          return;
+        }
+        if (showReceiptDialog) {
+          setShowReceiptDialog(false);
+          searchInputRef.current?.focus();
+          return;
+        }
+        if (isCartOpen && window.innerWidth < 1024) {
+          closeCart();
+          searchInputRef.current?.focus();
+          return;
+        }
+        setSearchQuery('');
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      if (event.key === 'F1') {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      if (paymentModal) {
+        if (event.key === 'F5' || (!typing && event.key === 'Enter')) {
+          event.preventDefault();
+          void processTransaction();
+          return;
+        }
+
+        if (event.key === 'F2') {
+          event.preventDefault();
+          paymentAmountInputRef.current?.focus();
+          paymentAmountInputRef.current?.select();
+          return;
+        }
+
+        if (!typing && ['1', '2', '3', '4'].includes(event.key)) {
+          event.preventDefault();
+          const method = paymentMethods[Number(event.key) - 1]?.method;
+          if (method) setSelectedMethod(method);
+        }
+        return;
+      }
+
+      if (event.key === 'F4' && canDiscount) {
+        event.preventDefault();
+        setIsCartOpen(true);
+        cartClosedByUserRef.current = false;
+        window.setTimeout(() => transactionDiscountInputRef.current?.focus(), 0);
+        return;
+      }
+
+      if (event.key === 'F5') {
+        event.preventDefault();
+        void initiateCheckout();
+        return;
+      }
+
+      if (event.key === 'F6') {
+        event.preventDefault();
+        navigate('/shift');
+        return;
+      }
+
+      if (event.key === 'F8') {
+        event.preventDefault();
+        navigate('/reports');
+        return;
+      }
+
+      if (event.key === 'F9') {
+        event.preventDefault();
+        navigate('/products');
+        return;
+      }
+
+      if (typing || cart.length === 0) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Backspace') {
+        event.preventDefault();
+        clearCart();
+        return;
+      }
+
+      const selectedItem = cart[activeCartIndex] || cart[0];
+      if (!selectedItem) return;
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setIsCartOpen(true);
+        cartClosedByUserRef.current = false;
+        setSelectedCartIndex((currentIndex) => Math.min(cart.length - 1, currentIndex + 1));
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setIsCartOpen(true);
+        cartClosedByUserRef.current = false;
+        setSelectedCartIndex((currentIndex) => Math.max(0, currentIndex - 1));
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        setIsCartOpen(true);
+        updateQty(selectedItem.product_id, selectedItem.unit_id, 1);
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        setIsCartOpen(true);
+        updateQty(selectedItem.product_id, selectedItem.unit_id, -1);
+        return;
+      }
+
+      if (event.key === 'Delete') {
+        event.preventDefault();
+        removeItem(selectedItem.product_id, selectedItem.unit_id);
+      }
+    };
+
+    window.addEventListener('keydown', handleShortcutKeyDown);
+    return () => window.removeEventListener('keydown', handleShortcutKeyDown);
+  }, [
+    canDiscount,
+    cart,
+    clearCart,
+    closeCart,
+    initiateCheckout,
+    isCartOpen,
+    navigate,
+    paymentModal,
+    processTransaction,
+    removeItem,
+    activeCartIndex,
+    showCameraScanner,
+    showReceiptDialog,
+    updateQty
+  ]);
 
   return (
     <div className="flex flex-col lg:flex-row h-full w-full font-sans print:hidden relative overflow-hidden">
@@ -514,8 +691,16 @@ export default function POS() {
               <p className="text-xs mt-1">Scan barcode atau pilih produk.</p>
             </div>
           ) : (
-            cart.map((item) => (
-              <div key={`${item.product_id}-${item.unit_id}`} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm space-y-3">
+            cart.map((item, index) => (
+              <div
+                key={`${item.product_id}-${item.unit_id}`}
+                onClick={() => setSelectedCartIndex(index)}
+                className={`bg-white p-4 rounded-xl border shadow-sm space-y-3 transition ${
+                  index === activeCartIndex
+                    ? 'border-primary-300 ring-2 ring-primary-100'
+                    : 'border-slate-100 hover:border-slate-200'
+                }`}
+              >
                 <div className="flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <h4 className="font-semibold text-slate-800 text-sm truncate">{item.name}</h4>
@@ -581,6 +766,7 @@ export default function POS() {
               <div className="flex justify-between items-center gap-3 text-slate-500 text-sm font-medium">
                 <span>Diskon transaksi</span>
                 <input
+                  ref={transactionDiscountInputRef}
                   type="number"
                   min={0}
                   value={transactionDiscount || ''}
@@ -670,6 +856,7 @@ export default function POS() {
                     <label className="text-sm font-bold text-slate-500 mb-1 block">Nominal diterima</label>
                     <div className="flex gap-2">
                       <input
+                        ref={paymentAmountInputRef}
                         type="number"
                         value={inputAmount}
                         onChange={(event) => setInputAmount(event.target.value)}

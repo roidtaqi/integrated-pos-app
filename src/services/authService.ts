@@ -5,10 +5,22 @@ export interface SessionUser {
   name: string;
   role: RoleName;
   role_id: string;
+  phone?: string;
+  email?: string;
+  position_title?: string;
+  profile_note?: string;
   permissions: PermissionCode[];
 }
 
 const SESSION_KEY = 'pos_current_user';
+
+function normalizeEmail(value?: string) {
+  return (value || '').trim().toLowerCase();
+}
+
+function normalizePhone(value?: string) {
+  return (value || '').replace(/\D/g, '');
+}
 
 function toSessionUser(user: User, permissions: PermissionCode[]): SessionUser {
   return {
@@ -16,17 +28,37 @@ function toSessionUser(user: User, permissions: PermissionCode[]): SessionUser {
     name: user.name,
     role: user.role,
     role_id: user.role_id,
+    phone: user.phone,
+    email: user.email,
+    position_title: user.position_title,
+    profile_note: user.profile_note,
     permissions
   };
 }
 
 export const authService = {
-  async login(pin: string) {
+  async login(identifierOrPin: string, pin?: string) {
     await initializeDatabase();
 
-    const user = await db.users.where('pin').equals(pin).first();
+    let user: User | undefined;
+    if (pin === undefined) {
+      user = await db.users.where('pin').equals(identifierOrPin).first();
+    } else {
+      const email = normalizeEmail(identifierOrPin);
+      const phone = normalizePhone(identifierOrPin);
+      const candidates = await db.users.where('pin').equals(pin).toArray();
+      user = candidates.find((candidate) => {
+        const emailMatches = email.length > 0 && normalizeEmail(candidate.email) === email;
+        const phoneMatches = phone.length > 0 && normalizePhone(candidate.phone) === phone;
+        return candidate.is_active && (emailMatches || phoneMatches);
+      });
+    }
+
     if (!user || !user.is_active) {
-      return { success: false, message: 'PIN salah atau user nonaktif' };
+      return {
+        success: false,
+        message: pin === undefined ? 'PIN salah atau user nonaktif' : 'Email/nomor HP atau PIN salah'
+      };
     }
 
     const role = await db.roles.get(user.role_id);
