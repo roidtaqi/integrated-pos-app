@@ -108,6 +108,46 @@ Setelah kedua aplikasi tersambung:
 2. Dari POS, buka `Sinkronisasi` dan pastikan status `CONNECTED`.
 3. Transaksi POS baru akan dikirim ke sync server dan diterima Inventory.
 
+### Cloud Snapshot Multi-device
+
+Sync server juga menyediakan REST API untuk menyimpan snapshot Inventory agar data laptop dan HP bisa sama.
+
+Endpoint utama:
+
+```txt
+GET /api/inventory/snapshot
+PUT /api/inventory/snapshot
+GET /api/pos/sales
+GET /api/state
+```
+
+Alur praktis:
+
+1. Di Inventory laptop, buka `Home -> Data & Pengaturan -> Sync`.
+2. Isi URL sync server, misalnya `wss://pos-server.up.railway.app`.
+3. Klik `Upload Cloud`.
+4. Di Inventory HP, isi URL yang sama.
+5. Klik `Ambil Cloud`.
+6. Di POS, buka `Sinkronisasi`, isi URL yang sama, lalu klik `Ambil Cloud Catalog` atau aktifkan realtime sync.
+
+Jika ingin membatasi akses REST API, set env berikut pada service sync server:
+
+```txt
+SYNC_API_TOKEN=isi-token-rahasia
+```
+
+Lalu isi token yang sama di halaman Sync Inventory dan POS.
+
+### Railway PostgreSQL
+
+Untuk membuat snapshot cloud lebih tahan restart/redeploy, pasang PostgreSQL ke service sync server dan pastikan env berikut tersedia:
+
+```txt
+DATABASE_URL=postgresql://...
+```
+
+Server otomatis membuat tabel `sync_state` dan menyimpan state realtime di sana. Jika `DATABASE_URL` tidak ada, server tetap berjalan memakai file storage lokal.
+
 ### Optional - Railway Volume
 
 Sync server menyimpan state ke file `realtime-sync-state.json`. Untuk demo singkat, storage container biasa sudah cukup. Jika ingin state lebih awet, tambahkan Railway Volume pada service sync server dan set environment variable:

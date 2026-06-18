@@ -2,12 +2,23 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pg from 'pg';
 import { WebSocketServer } from 'ws';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = process.env.SYNC_DATA_DIR || join(__dirname, '..', '.sync-data');
 const stateFile = join(dataDir, 'realtime-sync-state.json');
 const port = Number(process.env.PORT || process.env.SYNC_PORT || 8787);
+const apiToken = process.env.SYNC_API_TOKEN || '';
+const { Pool } = pg;
+const pool = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.POSTGRES_SSL === 'true' || process.env.PGSSLMODE === 'require'
+        ? { rejectUnauthorized: false }
+        : undefined
+    })
+  : null;
 
 const state = {
   latestCatalogEvent: null,
@@ -18,7 +29,41 @@ const state = {
 
 const clients = new Map();
 
+function snapshotState() {
+  return {
+    latestCatalogEvent: state.latestCatalogEvent,
+    salesEvents: state.salesEvents,
+    stockEvents: state.stockEvents,
+    eventIds: state.eventIds
+  };
+}
+
+async function ensureDatabase() {
+  if (!pool) return;
+
+  await pool.query(`
+    create table if not exists sync_state (
+      key text primary key,
+      value jsonb not null,
+      updated_at timestamptz not null default now()
+    )
+  `);
+}
+
 async function loadState() {
+  if (pool) {
+    await ensureDatabase();
+    const result = await pool.query('select value from sync_state where key = $1', ['realtime']);
+    const parsed = result.rows[0]?.value;
+    if (parsed) {
+      state.latestCatalogEvent = parsed.latestCatalogEvent || null;
+      state.salesEvents = parsed.salesEvents || [];
+      state.stockEvents = parsed.stockEvents || [];
+      state.eventIds = parsed.eventIds || {};
+      return;
+    }
+  }
+
   try {
     const raw = await readFile(stateFile, 'utf8');
     const parsed = JSON.parse(raw);
@@ -32,6 +77,20 @@ async function loadState() {
 }
 
 async function persistState() {
+  if (pool) {
+    await ensureDatabase();
+    await pool.query(
+      `
+        insert into sync_state (key, value, updated_at)
+        values ($1, $2::jsonb, now())
+        on conflict (key)
+        do update set value = excluded.value, updated_at = now()
+      `,
+      ['realtime', JSON.stringify(snapshotState())]
+    );
+    return;
+  }
+
   await mkdir(dataDir, { recursive: true });
   await writeFile(stateFile, JSON.stringify(state, null, 2));
 }
@@ -56,6 +115,35 @@ function safeParse(raw) {
   }
 }
 
+function setCors(response) {
+  response.setHeader('access-control-allow-origin', '*');
+  response.setHeader('access-control-allow-methods', 'GET,POST,PUT,OPTIONS');
+  response.setHeader('access-control-allow-headers', 'content-type,authorization,x-sync-token');
+}
+
+function sendJson(response, statusCode, payload) {
+  setCors(response);
+  response.writeHead(statusCode, { 'content-type': 'application/json' });
+  response.end(JSON.stringify(payload));
+}
+
+function isAuthorized(request) {
+  if (!apiToken) return true;
+  const authorization = request.headers.authorization || '';
+  const token = request.headers['x-sync-token'] || '';
+  return authorization === `Bearer ${apiToken}` || token === apiToken;
+}
+
+async function readJsonBody(request) {
+  const chunks = [];
+  for await (const chunk of request) {
+    chunks.push(chunk);
+  }
+
+  if (chunks.length === 0) return null;
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
 function rememberEvent(eventId) {
   if (!eventId) return false;
   if (state.eventIds[eventId]) return true;
@@ -75,10 +163,98 @@ function buildHelloState(client) {
 
 await loadState();
 
-const httpServer = createServer((request, response) => {
-  if (request.url === '/health') {
-    response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ ok: true, service: 'integrated-pos-sync-server' }));
+const httpServer = createServer(async (request, response) => {
+  setCors(response);
+
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
+  const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+
+  if (url.pathname === '/health') {
+    sendJson(response, 200, {
+      ok: true,
+      service: 'integrated-pos-sync-server',
+      storage: pool ? 'postgres' : 'file',
+      latest_catalog: Boolean(state.latestCatalogEvent),
+      sales_events: state.salesEvents.length
+    });
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/') && !isAuthorized(request)) {
+    sendJson(response, 401, { ok: false, message: 'Unauthorized' });
+    return;
+  }
+
+  if (url.pathname === '/api/state' && request.method === 'GET') {
+    sendJson(response, 200, {
+      ok: true,
+      latest_catalog: Boolean(state.latestCatalogEvent),
+      sales_events: state.salesEvents.length,
+      stock_events: state.stockEvents.length,
+      event_ids: Object.keys(state.eventIds).length,
+      storage: pool ? 'postgres' : 'file'
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/inventory/snapshot' && request.method === 'GET') {
+    sendJson(response, 200, {
+      ok: true,
+      event: state.latestCatalogEvent,
+      snapshot: state.latestCatalogEvent?.payload || null,
+      updated_at: state.latestCatalogEvent?.received_at || state.latestCatalogEvent?.created_at || null
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/inventory/snapshot' && (request.method === 'POST' || request.method === 'PUT')) {
+    try {
+      const body = await readJsonBody(request);
+      const event = body?.type === 'catalog.snapshot'
+        ? body
+        : {
+            type: 'catalog.snapshot',
+            event_id: body?.event_id || `catalog_${Date.now()}_${crypto.randomUUID()}`,
+            source: body?.source || 'inventory-pricing-app',
+            payload: body?.payload || body,
+            created_at: body?.created_at || new Date().toISOString()
+          };
+
+      const duplicate = rememberEvent(event.event_id);
+      if (!duplicate) {
+        state.latestCatalogEvent = {
+          ...event,
+          received_at: new Date().toISOString(),
+          source_client_id: 'http-api'
+        };
+        await persistState();
+      }
+
+      broadcast(state.latestCatalogEvent, (target) => target.app === 'pos');
+      sendJson(response, 200, {
+        ok: true,
+        duplicate,
+        event_id: event.event_id,
+        products: event.payload?.products?.length || 0
+      });
+    } catch (error) {
+      console.error(error);
+      sendJson(response, 400, { ok: false, message: 'Invalid snapshot payload' });
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/pos/sales' && request.method === 'GET') {
+    const limit = Number(url.searchParams.get('limit') || 250);
+    sendJson(response, 200, {
+      ok: true,
+      sales: state.salesEvents.slice(-Math.min(Math.max(limit, 1), 1000))
+    });
     return;
   }
 

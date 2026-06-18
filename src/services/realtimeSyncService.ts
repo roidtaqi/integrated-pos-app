@@ -6,6 +6,7 @@ type ConnectionStatus = 'DISABLED' | 'CONNECTING' | 'CONNECTED' | 'OFFLINE' | 'E
 interface RealtimeConfig {
   enabled: boolean;
   url: string;
+  apiToken?: string;
 }
 
 const DEFAULT_URL = 'ws://localhost:8787';
@@ -27,6 +28,13 @@ function parseMessage(event: MessageEvent) {
   } catch {
     return null;
   }
+}
+
+function toHttpUrl(url: string) {
+  const trimmed = (url || DEFAULT_URL).trim().replace(/\/$/, '');
+  if (trimmed.startsWith('wss://')) return `https://${trimmed.slice(6)}`;
+  if (trimmed.startsWith('ws://')) return `http://${trimmed.slice(5)}`;
+  return trimmed;
 }
 
 async function logSync(message: string, ok = true) {
@@ -118,10 +126,11 @@ function scheduleReconnect() {
 
 export const realtimeSyncService = {
   async getConfig(): Promise<RealtimeConfig> {
-    const settings = await db.app_settings.bulkGet(['realtime_enabled', 'realtime_url']);
+    const settings = await db.app_settings.bulkGet(['realtime_enabled', 'realtime_url', 'realtime_api_token']);
     return {
       enabled: settings[0]?.value === 'true',
-      url: settings[1]?.value || DEFAULT_URL
+      url: settings[1]?.value || DEFAULT_URL,
+      apiToken: settings[2]?.value || ''
     };
   },
 
@@ -129,7 +138,8 @@ export const realtimeSyncService = {
     const now = new Date().toISOString();
     await db.app_settings.bulkPut([
       { key: 'realtime_enabled', value: String(config.enabled), updated_at: now },
-      { key: 'realtime_url', value: config.url || DEFAULT_URL, updated_at: now }
+      { key: 'realtime_url', value: config.url || DEFAULT_URL, updated_at: now },
+      { key: 'realtime_api_token', value: config.apiToken || '', updated_at: now }
     ]);
   },
 
@@ -204,6 +214,30 @@ export const realtimeSyncService = {
 
   async pushPendingNow() {
     await publishPendingQueue();
+  },
+
+  async pullCloudCatalog(customUrl?: string, customToken?: string) {
+    const config = await this.getConfig();
+    const baseUrl = toHttpUrl(customUrl || config.url);
+    const apiToken = customToken ?? config.apiToken;
+    const response = await fetch(`${baseUrl}/api/inventory/snapshot`, {
+      headers: apiToken ? { 'x-sync-token': apiToken } : undefined
+    });
+
+    if (!response.ok) {
+      throw new Error(`Cloud catalog gagal: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data.snapshot) {
+      return { success: false, count: 0, message: 'Cloud belum memiliki catalog.' };
+    }
+
+    const result = await productService.importProductsFromJson(data.snapshot);
+    if (result.success) {
+      await logSync(`Cloud catalog diterima: ${result.count} produk`);
+    }
+    return result;
   }
 };
 

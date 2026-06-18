@@ -13,6 +13,7 @@ export default function Sync() {
   const [importStatus, setImportStatus] = useState<{ success: boolean; msg: string } | null>(null);
   const [realtimeEnabled, setRealtimeEnabled] = useState(false);
   const [realtimeUrl, setRealtimeUrl] = useState('ws://localhost:8787');
+  const [apiToken, setApiToken] = useState('');
   const [connectionStatus, setConnectionStatus] = useState(realtimeSyncService.getStatus());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -26,6 +27,7 @@ export default function Sync() {
       if (!mounted) return;
       setRealtimeEnabled(config.enabled);
       setRealtimeUrl(config.url);
+      setApiToken(config.apiToken || '');
     });
 
     const unsubscribe = realtimeSyncService.subscribe(setConnectionStatus);
@@ -99,7 +101,7 @@ export default function Sync() {
   };
 
   const saveRealtimeConfig = async () => {
-    await realtimeSyncService.saveConfig({ enabled: realtimeEnabled, url: realtimeUrl });
+    await realtimeSyncService.saveConfig({ enabled: realtimeEnabled, url: realtimeUrl, apiToken });
     if (realtimeEnabled) {
       await realtimeSyncService.connect(realtimeUrl);
     } else {
@@ -111,6 +113,21 @@ export default function Sync() {
   const pushPendingNow = async () => {
     await realtimeSyncService.pushPendingNow();
     toast.success('Pending queue dikirim ke sync server.');
+  };
+
+  const pullCloudCatalog = async () => {
+    try {
+      await realtimeSyncService.saveConfig({ enabled: realtimeEnabled, url: realtimeUrl, apiToken });
+      const result = await realtimeSyncService.pullCloudCatalog(realtimeUrl, apiToken);
+      if (result.success) {
+        toast.success(`Cloud catalog diterima: ${result.count} produk.`);
+      } else {
+        toast.error(result.message || 'Cloud belum memiliki catalog.');
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Gagal mengambil catalog cloud.');
+    }
   };
 
   return (
@@ -192,12 +209,19 @@ export default function Sync() {
           </span>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_auto_auto_auto] gap-3">
+        <div className="mt-5 grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto_auto_auto] gap-3">
           <input
             value={realtimeUrl}
             onChange={(event) => setRealtimeUrl(event.target.value)}
             className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary-500"
-            placeholder="ws://localhost:8787"
+            placeholder="wss://pos-server.up.railway.app"
+          />
+          <input
+            value={apiToken}
+            onChange={(event) => setApiToken(event.target.value)}
+            type="password"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary-500"
+            placeholder="API token opsional"
           />
           <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-bold text-slate-700">
             <input
@@ -213,6 +237,9 @@ export default function Sync() {
           </button>
           <button onClick={() => void pushPendingNow()} className="rounded-xl bg-slate-800 px-5 py-3 font-bold text-white hover:bg-slate-900">
             Push Pending
+          </button>
+          <button onClick={() => void pullCloudCatalog()} className="rounded-xl bg-slate-100 px-5 py-3 font-bold text-slate-700 hover:bg-slate-200">
+            Ambil Cloud Catalog
           </button>
         </div>
       </div>
