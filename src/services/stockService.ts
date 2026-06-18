@@ -14,7 +14,7 @@ export const stockService = {
     const outletId = params.outlet_id || DEFAULT_OUTLET_ID;
     const now = new Date().toISOString();
 
-    return db.transaction('rw', db.stock_balances, db.stock_movements, db.audit_logs, async () => {
+    const result = await db.transaction('rw', db.stock_balances, db.stock_movements, db.audit_logs, async () => {
       const existing = await db.stock_balances.where({ product_id: params.product_id, outlet_id: outletId }).first();
       const previousQty = existing?.qty || 0;
       const qtyChange = params.new_qty - previousQty;
@@ -58,6 +58,12 @@ export const stockService = {
 
       return { success: true, previousQty, newQty: params.new_qty, qtyChange };
     });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'stock', action: 'adjusted', productId: params.product_id } }));
+    }
+
+    return result;
   },
 
   async getStockOverview(outletId = DEFAULT_OUTLET_ID) {

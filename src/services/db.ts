@@ -184,7 +184,7 @@ export interface Customer {
 
 export interface SyncLog {
   id: string;
-  type: 'IMPORT_PRODUCT' | 'EXPORT_SALES' | 'IMPORT_CSV' | 'BACKUP_RESTORE';
+  type: 'IMPORT_PRODUCT' | 'EXPORT_SALES' | 'IMPORT_CSV' | 'BACKUP_RESTORE' | 'CLOUD_BACKUP' | 'CLOUD_RESTORE' | 'CLOUD_CATALOG';
   status: 'SUCCESS' | 'FAILED';
   records_processed: number;
   message: string;

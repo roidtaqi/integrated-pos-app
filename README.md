@@ -136,6 +136,8 @@ Endpoint utama:
 ```txt
 GET /api/inventory/snapshot
 PUT /api/inventory/snapshot
+GET /api/pos/snapshot
+PUT /api/pos/snapshot
 GET /api/pos/sales
 GET /api/state
 ```
@@ -148,6 +150,20 @@ Alur praktis:
 4. Di Inventory HP, isi URL yang sama.
 5. Klik `Ambil Cloud`.
 6. Di POS, buka `Sinkronisasi`, lalu klik `Ambil Catalog Cloud` jika catalog belum masuk otomatis.
+
+POS juga menyimpan backup operasional lengkap ke cloud melalui tombol `Backup Semua Data` di halaman `Sinkronisasi`. Backup otomatis juga dijadwalkan saat transaksi, shift/absensi, kas, stok, pelanggan, profil user, permission, settings, atau catalog berubah.
+
+Data POS yang ikut backup cloud:
+
+- User, role, dan permission
+- Outlet dan settings toko
+- Produk, satuan produk, barcode, stok, dan mutasi stok
+- Transaksi, item transaksi, pembayaran, dan status sync
+- Shift/absensi kasir, uang kas awal, kas masuk/keluar, kas akhir, dan selisih kas
+- Pelanggan
+- Audit log, sync log, dan sync queue
+
+Setting teknis device seperti URL/token sync tidak ditimpa saat `Ambil Semua Data`.
 
 Jika ingin membatasi akses REST API, set env berikut pada service sync server:
 

@@ -22,6 +22,7 @@ const pool = process.env.DATABASE_URL
 
 const state = {
   latestCatalogEvent: null,
+  latestPosSnapshotEvent: null,
   salesEvents: [],
   stockEvents: [],
   eventIds: {}
@@ -32,6 +33,7 @@ const clients = new Map();
 function snapshotState() {
   return {
     latestCatalogEvent: state.latestCatalogEvent,
+    latestPosSnapshotEvent: state.latestPosSnapshotEvent,
     salesEvents: state.salesEvents,
     stockEvents: state.stockEvents,
     eventIds: state.eventIds
@@ -57,6 +59,7 @@ async function loadState() {
     const parsed = result.rows[0]?.value;
     if (parsed) {
       state.latestCatalogEvent = parsed.latestCatalogEvent || null;
+      state.latestPosSnapshotEvent = parsed.latestPosSnapshotEvent || null;
       state.salesEvents = parsed.salesEvents || [];
       state.stockEvents = parsed.stockEvents || [];
       state.eventIds = parsed.eventIds || {};
@@ -68,6 +71,7 @@ async function loadState() {
     const raw = await readFile(stateFile, 'utf8');
     const parsed = JSON.parse(raw);
     state.latestCatalogEvent = parsed.latestCatalogEvent || null;
+    state.latestPosSnapshotEvent = parsed.latestPosSnapshotEvent || null;
     state.salesEvents = parsed.salesEvents || [];
     state.stockEvents = parsed.stockEvents || [];
     state.eventIds = parsed.eventIds || {};
@@ -156,8 +160,53 @@ function buildHelloState(client) {
     type: 'server.state',
     server_time: new Date().toISOString(),
     latest_catalog: client.app === 'pos' ? state.latestCatalogEvent : null,
+    latest_pos_snapshot: client.app === 'pos' ? state.latestPosSnapshotEvent : null,
     pending_sales: client.app === 'inventory' ? state.salesEvents.slice(-250) : [],
     pending_stock: client.app === 'inventory' ? state.stockEvents.slice(-250) : []
+  };
+}
+
+function getPosSnapshotStats(snapshot) {
+  if (!snapshot) {
+    return {
+      records: 0,
+      transactions: 0,
+      shifts: 0,
+      cash_movements: 0,
+      customers: 0,
+      products: 0
+    };
+  }
+
+  const tables = [
+    snapshot.users,
+    snapshot.roles,
+    snapshot.permissions,
+    snapshot.outlets,
+    snapshot.products,
+    snapshot.productUnits,
+    snapshot.productBarcodes,
+    snapshot.stockBalances,
+    snapshot.stockMovements,
+    snapshot.transactions,
+    snapshot.transactionItems,
+    snapshot.payments,
+    snapshot.shifts,
+    snapshot.cashMovements,
+    snapshot.customers,
+    snapshot.syncLogs,
+    snapshot.syncQueue,
+    snapshot.auditLogs,
+    snapshot.appSettings
+  ];
+
+  return {
+    records: tables.reduce((total, table) => total + (Array.isArray(table) ? table.length : 0), 0),
+    transactions: snapshot.transactions?.length || 0,
+    shifts: snapshot.shifts?.length || 0,
+    cash_movements: snapshot.cashMovements?.length || 0,
+    customers: snapshot.customers?.length || 0,
+    products: snapshot.products?.length || 0
   };
 }
 
@@ -175,11 +224,14 @@ const httpServer = createServer(async (request, response) => {
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
 
   if (url.pathname === '/health') {
+    const posSnapshot = state.latestPosSnapshotEvent?.payload || null;
     sendJson(response, 200, {
       ok: true,
       service: 'integrated-pos-sync-server',
       storage: pool ? 'postgres' : 'file',
       latest_catalog: Boolean(state.latestCatalogEvent),
+      latest_pos_snapshot: Boolean(state.latestPosSnapshotEvent),
+      pos_snapshot_stats: getPosSnapshotStats(posSnapshot),
       sales_events: state.salesEvents.length
     });
     return;
@@ -191,14 +243,67 @@ const httpServer = createServer(async (request, response) => {
   }
 
   if (url.pathname === '/api/state' && request.method === 'GET') {
+    const posSnapshot = state.latestPosSnapshotEvent?.payload || null;
     sendJson(response, 200, {
       ok: true,
       latest_catalog: Boolean(state.latestCatalogEvent),
+      latest_pos_snapshot: Boolean(state.latestPosSnapshotEvent),
+      pos_snapshot_updated_at: state.latestPosSnapshotEvent?.received_at || state.latestPosSnapshotEvent?.created_at || null,
+      pos_snapshot_stats: getPosSnapshotStats(posSnapshot),
       sales_events: state.salesEvents.length,
       stock_events: state.stockEvents.length,
       event_ids: Object.keys(state.eventIds).length,
       storage: pool ? 'postgres' : 'file'
     });
+    return;
+  }
+
+  if (url.pathname === '/api/pos/snapshot' && request.method === 'GET') {
+    const snapshot = state.latestPosSnapshotEvent?.payload || null;
+    sendJson(response, 200, {
+      ok: true,
+      event: state.latestPosSnapshotEvent,
+      snapshot,
+      stats: getPosSnapshotStats(snapshot),
+      updated_at: state.latestPosSnapshotEvent?.received_at || state.latestPosSnapshotEvent?.created_at || null
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/pos/snapshot' && (request.method === 'POST' || request.method === 'PUT')) {
+    try {
+      const body = await readJsonBody(request);
+      const event = body?.type === 'pos.snapshot'
+        ? body
+        : {
+            type: 'pos.snapshot',
+            event_id: body?.event_id || `pos_snapshot_${Date.now()}_${crypto.randomUUID()}`,
+            source: body?.source || 'integrated-pos-app',
+            payload: body?.payload || body,
+            created_at: body?.created_at || new Date().toISOString()
+          };
+
+      const duplicate = rememberEvent(event.event_id);
+      if (!duplicate) {
+        state.latestPosSnapshotEvent = {
+          ...event,
+          received_at: new Date().toISOString(),
+          source_client_id: 'http-api'
+        };
+        await persistState();
+      }
+
+      broadcast(state.latestPosSnapshotEvent, (target) => target.app === 'pos');
+      sendJson(response, 200, {
+        ok: true,
+        duplicate,
+        event_id: event.event_id,
+        stats: getPosSnapshotStats(event.payload)
+      });
+    } catch (error) {
+      console.error(error);
+      sendJson(response, 400, { ok: false, message: 'Invalid POS snapshot payload' });
+    }
     return;
   }
 

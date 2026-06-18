@@ -297,6 +297,10 @@ export const productService = {
         });
       }
     );
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'catalog', action: 'imported', products: products.length } }));
+    }
   },
 
   async getProductsWithUnits(includeInactive = true, outletId = DEFAULT_OUTLET_ID): Promise<ProductWithUnits[]> {

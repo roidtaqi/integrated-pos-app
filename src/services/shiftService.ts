@@ -35,6 +35,10 @@ export const shiftService = {
       });
     });
 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'shift', action: 'opened', id: newShift.id } }));
+    }
+
     return { success: true, shift: newShift };
   },
 
@@ -67,6 +71,10 @@ export const shiftService = {
         created_at: now
       });
     });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'cash_movement', action: type, shiftId } }));
+    }
 
     return { success: true };
   },
@@ -146,6 +154,10 @@ export const shiftService = {
         created_at: now
       });
     });
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'shift', action: 'closed', id: shiftId } }));
+    }
 
     return { success: true, expectedCash: summary.expectedCash, difference, summary };
   }

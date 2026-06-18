@@ -122,6 +122,7 @@ export default function Settings() {
 
   const handleSaveSettings = async () => {
     await settingsService.saveSettings(settings);
+    window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'settings', action: 'updated' } }));
     toast.success('Pengaturan berhasil disimpan.');
   };
 
@@ -171,6 +172,7 @@ export default function Settings() {
     }
 
     setUserDraftState({ userId: '', values: {} });
+    window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'user', action: 'updated', id: selectedUser.id } }));
     toast.success('Profil user berhasil disimpan.');
   };
 
@@ -204,6 +206,7 @@ export default function Settings() {
     }
 
     setRoleDraftState({ roleId: '' });
+    window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'role', action: 'updated', id: selectedRole.id } }));
     toast.success('Permission role berhasil disimpan.');
   };
 

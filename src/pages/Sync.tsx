@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertCircle, CheckCircle, CloudDownload, Download, FileJson, FolderUp, RefreshCw, Upload, Wifi } from 'lucide-react';
+import { AlertCircle, CheckCircle, CloudDownload, CloudUpload, Database, Download, FileJson, FolderUp, RefreshCw, Upload, Wifi } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productService } from '../services/productService';
 import { syncService } from '../services/syncService';
 import { realtimeSyncService } from '../services/realtimeSyncService';
 import { formatDateTime } from '../utils/format';
+import { authService } from '../services/authService';
 
 export default function Sync() {
   const [isImporting, setIsImporting] = useState(false);
@@ -13,6 +14,8 @@ export default function Sync() {
   const [isPullingCloud, setIsPullingCloud] = useState(false);
   const [isPushingPending, setIsPushingPending] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isBackingUpAll, setIsBackingUpAll] = useState(false);
+  const [isRestoringAll, setIsRestoringAll] = useState(false);
   const [importStatus, setImportStatus] = useState<{ success: boolean; msg: string } | null>(null);
   const [connectionStatus, setConnectionStatus] = useState(realtimeSyncService.getStatus());
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,6 +139,67 @@ export default function Sync() {
     }
   };
 
+  const backupAllData = async () => {
+    setIsBackingUpAll(true);
+    try {
+      const result = await realtimeSyncService.pushCloudPosSnapshot();
+      toast.success(`Semua data POS tersimpan: ${result.records} records.`);
+    } catch (error) {
+      console.error(error);
+      toast.error('Gagal menyimpan semua data POS ke cloud.');
+    } finally {
+      setIsBackingUpAll(false);
+    }
+  };
+
+  const restoreAllData = async () => {
+    setIsRestoringAll(true);
+    try {
+      const result = await realtimeSyncService.pullCloudPosSnapshot();
+      if (result.success) {
+        await authService.refreshCurrentUser();
+        toast.success(`Data POS dipulihkan: ${result.records} records.`);
+      } else {
+        toast.error(result.message || 'Cloud belum memiliki backup POS.');
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Gagal mengambil semua data POS dari cloud.');
+    } finally {
+      setIsRestoringAll(false);
+    }
+  };
+
+  const confirmRestoreAllData = () => {
+    toast((item) => (
+      <div className="flex max-w-sm flex-col gap-3">
+        <div>
+          <p className="font-bold text-slate-900">Ambil semua data dari cloud?</p>
+          <p className="mt-1 text-sm text-slate-600">Data POS di device ini akan disamakan dengan backup cloud.</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              toast.dismiss(item.id);
+              void restoreAllData();
+            }}
+            className="rounded-lg bg-primary-600 px-3 py-2 text-sm font-bold text-white"
+          >
+            Lanjut
+          </button>
+          <button
+            type="button"
+            onClick={() => toast.dismiss(item.id)}
+            className="rounded-lg bg-slate-100 px-3 py-2 text-sm font-bold text-slate-700"
+          >
+            Batal
+          </button>
+        </div>
+      </div>
+    ), { duration: 8000, position: 'top-center' });
+  };
+
   const connectionLabel: Record<typeof connectionStatus, string> = {
     CONNECTED: 'Terhubung',
     CONNECTING: 'Menghubungkan',
@@ -210,6 +274,41 @@ export default function Sync() {
               <Upload size={18} />
               {isPushingPending ? 'Mengirim...' : 'Kirim Pending'}
             </button>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-emerald-100 bg-emerald-50 p-3 sm:p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-700">
+                <Database size={20} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="font-bold text-emerald-900">Data POS Cloud</h3>
+                <p className="mt-1 text-sm text-emerald-800">
+                  Menyimpan penjualan, pembayaran, shift, kas, stok, pelanggan, user, outlet, audit, dan settings toko.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => void backupAllData()}
+                disabled={isBackingUpAll}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-800 disabled:bg-slate-300"
+              >
+                <CloudUpload size={18} />
+                {isBackingUpAll ? 'Menyimpan...' : 'Backup Semua Data'}
+              </button>
+              <button
+                type="button"
+                onClick={confirmRestoreAllData}
+                disabled={isRestoringAll}
+                className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-white px-4 py-2.5 text-sm font-bold text-emerald-800 hover:bg-emerald-100 disabled:bg-slate-100 disabled:text-slate-400"
+              >
+                <CloudDownload size={18} />
+                {isRestoringAll ? 'Mengambil...' : 'Ambil Semua Data'}
+              </button>
+            </div>
           </div>
         </section>
 

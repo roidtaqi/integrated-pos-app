@@ -70,6 +70,7 @@ export default function Profile() {
     });
     await authService.refreshCurrentUser();
     setDraftOverrides({});
+    window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'user', action: 'profile_updated', id: user.id } }));
     toast.success('Profil berhasil diperbarui.');
   };
 

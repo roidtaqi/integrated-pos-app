@@ -24,14 +24,16 @@ export default function Customers() {
     }
 
     try {
+      const customerId = crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2);
       await db.customers.add({
-        id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2),
+        id: customerId,
         name: formData.name,
         phone: formData.phone,
         address: formData.address,
         points: 0,
         created_at: new Date().toISOString()
       });
+      window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'customer', action: 'created', id: customerId } }));
       toast.success('Pelanggan berhasil ditambahkan!');
       setFormData({ name: '', phone: '', address: '' });
       setShowModal(false);
