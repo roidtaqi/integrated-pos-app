@@ -6,6 +6,17 @@ export const shiftService = {
     return db.shifts.where({ cashier_id: cashierId, status: 'OPEN' }).first();
   },
 
+  async getClosedShiftHistory(cashierId: string, limit = 5): Promise<Shift[]> {
+    const shifts = await db.shifts.where({ cashier_id: cashierId, status: 'CLOSED' }).toArray();
+    return shifts
+      .sort((a, b) => {
+        const dateA = new Date(a.closed_at || a.opened_at).getTime();
+        const dateB = new Date(b.closed_at || b.opened_at).getTime();
+        return dateB - dateA;
+      })
+      .slice(0, limit);
+  },
+
   async openShift(cashierId: string, outletId: string, startingCash: number) {
     const existing = await this.getCurrentShift(cashierId);
     if (existing) {

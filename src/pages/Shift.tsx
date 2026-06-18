@@ -11,11 +11,12 @@ export default function Shift() {
   const user = authService.getCurrentUser();
   const shift = useLiveQuery(() => user ? shiftService.getCurrentShift(user.id) : undefined, [user?.id]);
   const summary = useLiveQuery(() => shift ? shiftService.getShiftSummary(shift) : undefined, [shift?.id]);
+  const closedShiftHistory = useLiveQuery(() => user ? shiftService.getClosedShiftHistory(user.id, 5) : [], [user?.id]) || [];
+  const lastClosedShift = closedShiftHistory[0];
   const [startingCash, setStartingCash] = useState('');
   const [actualCash, setActualCash] = useState('');
   const [cashMovementAmount, setCashMovementAmount] = useState('');
   const [cashMovementNote, setCashMovementNote] = useState('');
-  const [lastCloseSummary, setLastCloseSummary] = useState<{ expectedCash: number; difference: number } | null>(null);
 
   const handleOpenShift = async () => {
     if (!user) return;
@@ -23,7 +24,6 @@ export default function Shift() {
     if (result.success) {
       toast.success('Shift berhasil dibuka.');
       setStartingCash('');
-      setLastCloseSummary(null);
     } else {
       toast.error(result.message || 'Gagal membuka shift.');
     }
@@ -52,7 +52,6 @@ export default function Shift() {
     if (!shift) return;
     const result = await shiftService.closeShift(shift.id, Number(actualCash || 0));
     if (result.success) {
-      setLastCloseSummary({ expectedCash: result.expectedCash || 0, difference: result.difference || 0 });
       setActualCash('');
       toast.success('Shift berhasil ditutup.');
     } else {
@@ -90,21 +89,44 @@ export default function Shift() {
 
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
             <h2 className="text-lg font-bold mb-4">Ringkasan Shift Terakhir</h2>
-            {lastCloseSummary ? (
-              <div className="space-y-3">
+            {lastClosedShift ? (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm text-slate-500">Ditutup</p>
+                  <p className="font-bold text-slate-900">{formatDateTime(lastClosedShift.closed_at || lastClosedShift.opened_at)}</p>
+                </div>
                 <div className="flex justify-between border-b border-slate-100 pb-3">
                   <span className="text-slate-500">Expected cash</span>
-                  <span className="font-bold">{formatRupiah(lastCloseSummary.expectedCash)}</span>
+                  <span className="font-bold">{formatRupiah(lastClosedShift.expected_cash || 0)}</span>
+                </div>
+                <div className="flex justify-between border-b border-slate-100 pb-3">
+                  <span className="text-slate-500">Uang fisik</span>
+                  <span className="font-bold">{formatRupiah(lastClosedShift.actual_cash || 0)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Selisih</span>
-                  <span className={`font-bold ${lastCloseSummary.difference === 0 ? 'text-slate-900' : lastCloseSummary.difference > 0 ? 'text-emerald-700' : 'text-danger'}`}>
-                    {formatRupiah(lastCloseSummary.difference)}
+                  <span className={`font-bold ${(lastClosedShift.difference || 0) === 0 ? 'text-slate-900' : (lastClosedShift.difference || 0) > 0 ? 'text-emerald-700' : 'text-danger'}`}>
+                    {formatRupiah(lastClosedShift.difference || 0)}
                   </span>
                 </div>
+                {closedShiftHistory.length > 1 && (
+                  <div className="border-t border-slate-100 pt-4">
+                    <p className="mb-2 text-xs font-bold uppercase text-slate-400">Riwayat terbaru</p>
+                    <div className="space-y-2">
+                      {closedShiftHistory.slice(1).map((history) => (
+                        <div key={history.id} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+                          <span className="text-slate-600">{formatDateTime(history.closed_at || history.opened_at)}</span>
+                          <span className={`font-bold ${(history.difference || 0) === 0 ? 'text-slate-900' : (history.difference || 0) > 0 ? 'text-emerald-700' : 'text-danger'}`}>
+                            {formatRupiah(history.difference || 0)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
-              <p className="text-slate-400">Belum ada shift yang ditutup pada sesi ini.</p>
+              <p className="text-slate-400">Belum ada shift yang ditutup.</p>
             )}
           </div>
         </div>
