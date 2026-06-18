@@ -189,7 +189,20 @@ Untuk membuat snapshot cloud lebih tahan restart/redeploy, pasang PostgreSQL ke 
 DATABASE_URL=postgresql://...
 ```
 
-Server otomatis membuat tabel `sync_state` dan menyimpan state realtime di sana. Jika `DATABASE_URL` tidak ada, server tetap berjalan memakai file storage lokal.
+Server otomatis membuat tabel domain PostgreSQL untuk POS dan Inventory, lalu memecah setiap snapshot cloud ke tabel-tabel tersebut. Tabel `sync_state` masih dibuat sebagai metadata/legacy fallback, tetapi data utama tidak lagi hanya disimpan sebagai satu JSON besar.
+
+Contoh tabel yang akan dibuat otomatis:
+
+- `pos_users`, `pos_roles`, `pos_permissions`
+- `pos_products`, `pos_product_units`, `pos_stock_balances`
+- `pos_transactions`, `pos_transaction_items`, `pos_payments`
+- `pos_shifts`, `pos_cash_movements`, `pos_customers`
+- `inventory_products`, `inventory_product_units`, `inventory_margin_rules`
+- `inventory_price_calculations`, `inventory_price_histories`
+- `inventory_product_unit_cost_histories`, `inventory_csv_import_batches`
+- `sync_sales_events`, `sync_stock_events`, `cloud_snapshot_meta`
+
+Endpoint snapshot tetap kompatibel, tetapi saat `DATABASE_URL` aktif response dibangun kembali dari tabel PostgreSQL. Jika `DATABASE_URL` tidak ada, server tetap berjalan memakai file storage lokal.
 
 ### Optional - Railway Volume
 
