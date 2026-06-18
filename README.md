@@ -25,10 +25,17 @@ Jalankan sync server real-time lokal:
 npm run sync:server
 ```
 
-Default WebSocket URL:
+Default production WebSocket URL:
 
 ```txt
-ws://localhost:8787
+wss://pos-server.up.railway.app
+```
+
+Untuk development lokal, buat `.env.local` sebelum menjalankan `npm run dev`:
+
+```txt
+VITE_SYNC_URL=ws://localhost:8787
+VITE_SYNC_API_TOKEN=
 ```
 
 Build production:
@@ -91,16 +98,28 @@ Jika response berisi `ok: true`, WebSocket server sudah siap.
 
 Karena Inventory dan POS berjalan di HTTPS, URL sync harus memakai `wss://`, bukan `ws://`.
 
-Contoh:
+Default production POS sudah diarahkan ke server Kastur:
 
 ```txt
-wss://integrated-pos-sync-server.up.railway.app
+wss://pos-server.up.railway.app
 ```
 
-Masukkan URL tersebut di:
+Kastur POS tidak menampilkan input URL/token ke user kasir. POS otomatis connect memakai konfigurasi build aplikasi.
 
-- Inventory Pricing App: `Home -> Data & Pengaturan -> Sync`.
-- Kastur POS: `Sinkronisasi -> Real-time Sync`.
+Jika suatu saat sync server pindah URL atau token diganti, ubah variable build di service frontend POS lalu redeploy:
+
+```txt
+VITE_SYNC_URL=wss://domain-sync-baru.up.railway.app
+VITE_SYNC_API_TOKEN=token-yang-sama-dengan-sync-server
+```
+
+Untuk service sync server, token REST API tetap memakai:
+
+```txt
+SYNC_API_TOKEN=token-yang-sama-dengan-frontend
+```
+
+Inventory Pricing App masih perlu mengisi URL/token di halaman `Home -> Data & Pengaturan -> Sync`, karena Inventory dipakai sebagai perangkat admin/source of truth.
 
 Setelah kedua aplikasi tersambung:
 
@@ -128,7 +147,7 @@ Alur praktis:
 3. Klik `Upload Cloud`.
 4. Di Inventory HP, isi URL yang sama.
 5. Klik `Ambil Cloud`.
-6. Di POS, buka `Sinkronisasi`, isi URL yang sama, lalu klik `Ambil Cloud Catalog` atau aktifkan realtime sync.
+6. Di POS, buka `Sinkronisasi`, lalu klik `Ambil Catalog Cloud` jika catalog belum masuk otomatis.
 
 Jika ingin membatasi akses REST API, set env berikut pada service sync server:
 
@@ -136,7 +155,7 @@ Jika ingin membatasi akses REST API, set env berikut pada service sync server:
 SYNC_API_TOKEN=isi-token-rahasia
 ```
 
-Lalu isi token yang sama di halaman Sync Inventory dan POS.
+Lalu isi token yang sama di halaman Sync Inventory. POS mengambil token dari konfigurasi build `VITE_SYNC_API_TOKEN`.
 
 ### Railway PostgreSQL
 
@@ -181,7 +200,8 @@ Langkah:
 7. Setelah deploy selesai, buka service `integrated-pos-sync-server`.
 8. Salin URL Render, misalnya `https://integrated-pos-sync-server.onrender.com`.
 9. Ubah menjadi `wss://integrated-pos-sync-server.onrender.com`.
-10. Masukkan URL `wss://...` itu di halaman Sinkronisasi POS dan halaman Sync Inventory Pricing App.
+10. Masukkan URL `wss://...` itu di halaman Sync Inventory Pricing App.
+11. Untuk POS, set `VITE_SYNC_URL=wss://integrated-pos-sync-server.onrender.com` di service frontend, lalu redeploy.
 
 Catatan Render Free:
 
@@ -381,8 +401,8 @@ Alur:
 1. Buka Inventory Pricing App -> Lainnya -> Real-time Sync.
 2. Isi URL `ws://localhost:8787`, aktifkan sync, lalu klik `Simpan & Connect`.
 3. Klik `Publish Catalog Sekarang`.
-4. Buka POS -> Sinkronisasi.
-5. Isi URL `ws://localhost:8787`, aktifkan sync, lalu klik `Simpan & Connect`.
+4. Jalankan POS dengan `.env.local` berisi `VITE_SYNC_URL=ws://localhost:8787`.
+5. Buka POS -> Sinkronisasi dan pastikan status `CONNECTED`.
 6. Catalog/harga aktif dari Inventory akan masuk ke POS otomatis.
 7. Saat POS menyimpan transaksi, sales event dikirim real-time ke sync server dan diterima Inventory.
 

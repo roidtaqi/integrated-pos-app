@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertCircle, CheckCircle, Download, Eye, EyeOff, FileJson, FolderUp, RefreshCw, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle, CloudDownload, Download, FileJson, FolderUp, RefreshCw, Upload, Wifi } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productService } from '../services/productService';
 import { syncService } from '../services/syncService';
@@ -10,11 +10,10 @@ import { formatDateTime } from '../utils/format';
 export default function Sync() {
   const [isImporting, setIsImporting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPullingCloud, setIsPullingCloud] = useState(false);
+  const [isPushingPending, setIsPushingPending] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
   const [importStatus, setImportStatus] = useState<{ success: boolean; msg: string } | null>(null);
-  const [realtimeEnabled, setRealtimeEnabled] = useState(false);
-  const [realtimeUrl, setRealtimeUrl] = useState('ws://localhost:8787');
-  const [apiToken, setApiToken] = useState('');
-  const [showApiToken, setShowApiToken] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState(realtimeSyncService.getStatus());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -23,17 +22,8 @@ export default function Sync() {
   const syncLogs = useLiveQuery(() => syncService.getSyncLogs(), []) || [];
 
   useEffect(() => {
-    let mounted = true;
-    realtimeSyncService.getConfig().then((config) => {
-      if (!mounted) return;
-      setRealtimeEnabled(config.enabled);
-      setRealtimeUrl(config.url);
-      setApiToken(config.apiToken || '');
-    });
-
     const unsubscribe = realtimeSyncService.subscribe(setConnectionStatus);
     return () => {
-      mounted = false;
       unsubscribe();
     };
   }, []);
@@ -101,25 +91,38 @@ export default function Sync() {
     toast.success('Transaksi pending ditandai sudah diekspor.');
   };
 
-  const saveRealtimeConfig = async () => {
-    await realtimeSyncService.saveConfig({ enabled: realtimeEnabled, url: realtimeUrl, apiToken });
-    if (realtimeEnabled) {
-      await realtimeSyncService.connect(realtimeUrl);
-    } else {
-      realtimeSyncService.disconnect();
+  const connectRealtime = async () => {
+    setIsConnecting(true);
+    try {
+      const config = await realtimeSyncService.getConfig();
+      await realtimeSyncService.saveConfig(config);
+      await realtimeSyncService.connect(config.url);
+      toast.success('POS terhubung ke Kastur Cloud.');
+    } catch (error) {
+      console.error(error);
+      toast.error('Gagal menghubungkan POS ke cloud.');
+    } finally {
+      setIsConnecting(false);
     }
-    toast.success('Konfigurasi realtime sync tersimpan.');
   };
 
   const pushPendingNow = async () => {
-    await realtimeSyncService.pushPendingNow();
-    toast.success('Pending queue dikirim ke sync server.');
+    setIsPushingPending(true);
+    try {
+      await realtimeSyncService.pushPendingNow();
+      toast.success('Pending queue dikirim ke sync server.');
+    } catch (error) {
+      console.error(error);
+      toast.error('Gagal mengirim pending queue.');
+    } finally {
+      setIsPushingPending(false);
+    }
   };
 
   const pullCloudCatalog = async () => {
+    setIsPullingCloud(true);
     try {
-      await realtimeSyncService.saveConfig({ enabled: realtimeEnabled, url: realtimeUrl, apiToken });
-      const result = await realtimeSyncService.pullCloudCatalog(realtimeUrl, apiToken);
+      const result = await realtimeSyncService.pullCloudCatalog();
       if (result.success) {
         toast.success(`Cloud catalog diterima: ${result.count} produk.`);
       } else {
@@ -128,6 +131,8 @@ export default function Sync() {
     } catch (error) {
       console.error(error);
       toast.error('Gagal mengambil catalog cloud.');
+    } finally {
+      setIsPullingCloud(false);
     }
   };
 
@@ -194,9 +199,9 @@ export default function Sync() {
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex-1">
-            <h2 className="text-lg font-bold mb-1">Real-time Sync</h2>
+            <h2 className="text-lg font-bold mb-1">Cloud Sync Kastur</h2>
             <p className="text-sm text-slate-500">
-              Hubungkan POS ke sync server agar catalog dari Inventory masuk otomatis dan transaksi POS terkirim real-time.
+              POS otomatis memakai server Kastur Cloud. Katalog dari Inventory dan transaksi pending dikirim lewat koneksi ini.
             </p>
           </div>
           <span className={`inline-flex w-fit rounded-full px-3 py-1 text-xs font-bold ${
@@ -210,61 +215,45 @@ export default function Sync() {
           </span>
         </div>
 
-        <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
-          <label className="block">
-            <span className="mb-2 block text-sm font-bold text-slate-700">URL Sync Server</span>
-            <input
-              value={realtimeUrl}
-              onChange={(event) => setRealtimeUrl(event.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="wss://pos-server.up.railway.app"
-            />
-          </label>
-
-          <label className="block">
-            <span className="mb-2 block text-sm font-bold text-slate-700">Token API Sync</span>
-            <div className="flex rounded-xl border border-slate-200 bg-slate-50 focus-within:ring-2 focus-within:ring-primary-500">
-              <input
-                value={apiToken}
-                onChange={(event) => setApiToken(event.target.value)}
-                type={showApiToken ? 'text' : 'password'}
-                className="min-w-0 flex-1 rounded-l-xl bg-transparent px-4 py-3 outline-none"
-                placeholder="Isi sama seperti SYNC_API_TOKEN di Railway"
-                autoComplete="off"
-              />
-              <button
-                type="button"
-                onClick={() => setShowApiToken((current) => !current)}
-                className="flex w-12 items-center justify-center rounded-r-xl text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                aria-label={showApiToken ? 'Sembunyikan token API' : 'Tampilkan token API'}
-              >
-                {showApiToken ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
-            <p className="mt-2 text-xs font-medium text-slate-500">
-              Token ini dipakai saat POS mengambil catalog dari cloud sync server.
-            </p>
-          </label>
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase text-slate-400">Transaksi Pending</p>
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">{pendingTx.length}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase text-slate-400">Queue</p>
+            <p className="mt-1 text-2xl font-extrabold text-slate-900">{pendingQueue.length}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-bold uppercase text-slate-400">Mode</p>
+            <p className="mt-2 text-sm font-extrabold text-emerald-700">Otomatis</p>
+          </div>
         </div>
 
         <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
-          <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-bold text-slate-700 lg:w-fit">
-            <input
-              type="checkbox"
-              checked={realtimeEnabled}
-              onChange={(event) => setRealtimeEnabled(event.target.checked)}
-              className="h-5 w-5"
-            />
-            Aktifkan Realtime
-          </label>
-          <button onClick={() => void saveRealtimeConfig()} className="rounded-xl bg-primary-600 px-5 py-3 font-bold text-white hover:bg-primary-700">
-            Simpan & Connect
+          <button
+            onClick={() => void connectRealtime()}
+            disabled={isConnecting}
+            className="rounded-xl bg-primary-600 px-5 py-3 font-bold text-white hover:bg-primary-700 disabled:bg-slate-300 flex items-center justify-center gap-2"
+          >
+            <Wifi size={18} />
+            {isConnecting ? 'Menghubungkan...' : 'Hubungkan Ulang'}
           </button>
-          <button onClick={() => void pullCloudCatalog()} className="rounded-xl bg-slate-100 px-5 py-3 font-bold text-slate-700 hover:bg-slate-200">
-            Ambil Cloud Catalog
+          <button
+            onClick={() => void pullCloudCatalog()}
+            disabled={isPullingCloud}
+            className="rounded-xl bg-slate-100 px-5 py-3 font-bold text-slate-700 hover:bg-slate-200 disabled:bg-slate-100 disabled:text-slate-400 flex items-center justify-center gap-2"
+          >
+            <CloudDownload size={18} />
+            {isPullingCloud ? 'Mengambil...' : 'Ambil Catalog Cloud'}
           </button>
-          <button onClick={() => void pushPendingNow()} className="rounded-xl bg-slate-800 px-5 py-3 font-bold text-white hover:bg-slate-900">
-            Push Pending
+          <button
+            onClick={() => void pushPendingNow()}
+            disabled={isPushingPending}
+            className="rounded-xl bg-slate-800 px-5 py-3 font-bold text-white hover:bg-slate-900 disabled:bg-slate-300 flex items-center justify-center gap-2"
+          >
+            <Upload size={18} />
+            {isPushingPending ? 'Mengirim...' : 'Kirim Pending'}
           </button>
         </div>
       </div>

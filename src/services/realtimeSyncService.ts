@@ -9,7 +9,8 @@ interface RealtimeConfig {
   apiToken?: string;
 }
 
-const DEFAULT_URL = 'ws://localhost:8787';
+const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://pos-server.up.railway.app';
+const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || 'kastur-sync-2026-Roid-Nawir-8xAq72Lm';
 const listeners = new Set<(status: ConnectionStatus) => void>();
 
 let socket: WebSocket | null = null;
@@ -126,11 +127,10 @@ function scheduleReconnect() {
 
 export const realtimeSyncService = {
   async getConfig(): Promise<RealtimeConfig> {
-    const settings = await db.app_settings.bulkGet(['realtime_enabled', 'realtime_url', 'realtime_api_token']);
     return {
-      enabled: settings[0]?.value === 'true',
-      url: settings[1]?.value || DEFAULT_URL,
-      apiToken: settings[2]?.value || ''
+      enabled: true,
+      url: DEFAULT_URL,
+      apiToken: DEFAULT_API_TOKEN
     };
   },
 
@@ -155,6 +155,7 @@ export const realtimeSyncService = {
 
   async autoStart() {
     const config = await this.getConfig();
+    await this.saveConfig(config);
     if (config.enabled) {
       await this.connect(config.url);
     }
