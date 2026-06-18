@@ -111,7 +111,13 @@ Jika suatu saat sync server pindah URL atau token diganti, ubah variable build d
 ```txt
 VITE_SYNC_URL=wss://domain-sync-baru.up.railway.app
 VITE_SYNC_API_TOKEN=token-yang-sama-dengan-sync-server
+VITE_POS_CLOUD_PULL_INTERVAL_MS=120000
+VITE_POS_CLOUD_PUSH_INTERVAL_MS=60000
 ```
+
+`VITE_POS_CLOUD_PULL_INTERVAL_MS` mengatur interval POS otomatis mengambil backup cloud. Default-nya `120000` ms atau 2 menit. Nilai minimalnya 30000 ms.
+
+`VITE_POS_CLOUD_PUSH_INTERVAL_MS` mengatur interval POS otomatis upload backup cloud saat ada perubahan lokal. Default-nya `60000` ms atau 1 menit. Nilai minimalnya 15000 ms.
 
 Untuk service sync server, token REST API tetap memakai:
 
@@ -151,7 +157,9 @@ Alur praktis:
 5. Klik `Ambil Cloud`.
 6. Di POS, buka `Sinkronisasi`, lalu klik `Ambil Catalog Cloud` jika catalog belum masuk otomatis.
 
-POS juga menyimpan backup operasional lengkap ke cloud melalui tombol `Backup Semua Data` di halaman `Sinkronisasi`. Backup otomatis juga dijadwalkan saat transaksi, shift/absensi, kas, stok, pelanggan, profil user, permission, settings, atau catalog berubah.
+POS juga menyimpan backup operasional lengkap ke cloud melalui tombol `Backup Semua Data` di halaman `Sinkronisasi`. Backup otomatis dijadwalkan saat transaksi, shift/absensi, kas, stok, pelanggan, profil user, permission, settings, atau catalog berubah, lalu dicoba ulang berkala sesuai `VITE_POS_CLOUD_PUSH_INTERVAL_MS` selama masih ada perubahan lokal yang belum ter-upload.
+
+Setiap device POS otomatis mengambil backup cloud secara berkala sesuai `VITE_POS_CLOUD_PULL_INTERVAL_MS`. Auto-restore akan dilewati jika device masih memiliki transaksi/queue pending atau perubahan lokal yang belum ter-upload agar data device tidak tertimpa.
 
 Data POS yang ikut backup cloud:
 

@@ -5,6 +5,11 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Gagal memproses data.';
 }
 
+function notifyPosDataChanged(entity: string, action: string) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity, action } }));
+}
+
 export const syncService = {
   async getPendingTransactions() {
     return db.transactions.where('sync_status').equals('PENDING').toArray();
@@ -61,6 +66,7 @@ export const syncService = {
         message: `Export sales dibuat untuk ${pendingTx.length} transaksi`,
         created_at: new Date().toISOString()
       });
+      notifyPosDataChanged('sync_log', 'export_success');
 
       return { success: true, data: { sales: salesPayload }, count: pendingTx.length };
     } catch (error) {
@@ -73,6 +79,7 @@ export const syncService = {
         message,
         created_at: new Date().toISOString()
       });
+      notifyPosDataChanged('sync_log', 'export_failed');
       return { success: false, message };
     }
   },
@@ -88,6 +95,7 @@ export const syncService = {
         }
       }
     });
+    notifyPosDataChanged('transaction', 'marked_synced');
   },
 
   async getSyncLogs(): Promise<SyncLog[]> {

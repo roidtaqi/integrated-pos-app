@@ -41,6 +41,9 @@ export const authService = {
       entity_id: user.id,
       created_at: new Date().toISOString()
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'audit_log', action: 'login', id: user.id } }));
+    }
 
     return { success: true, user: sessionUser };
   },

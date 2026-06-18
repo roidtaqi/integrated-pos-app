@@ -273,31 +273,39 @@ const httpServer = createServer(async (request, response) => {
   if (url.pathname === '/api/pos/snapshot' && (request.method === 'POST' || request.method === 'PUT')) {
     try {
       const body = await readJsonBody(request);
+      const receivedAt = new Date().toISOString();
       const event = body?.type === 'pos.snapshot'
         ? body
         : {
             type: 'pos.snapshot',
             event_id: body?.event_id || `pos_snapshot_${Date.now()}_${crypto.randomUUID()}`,
             source: body?.source || 'integrated-pos-app',
+            source_device_id: body?.source_device_id || body?.payload?.sourceDeviceId || null,
             payload: body?.payload || body,
-            created_at: body?.created_at || new Date().toISOString()
+            created_at: body?.created_at || receivedAt
           };
+      event.source_device_id = event.source_device_id || event.payload?.sourceDeviceId || null;
 
       const duplicate = rememberEvent(event.event_id);
       if (!duplicate) {
         state.latestPosSnapshotEvent = {
           ...event,
-          received_at: new Date().toISOString(),
+          received_at: receivedAt,
           source_client_id: 'http-api'
         };
         await persistState();
       }
 
-      broadcast(state.latestPosSnapshotEvent, (target) => target.app === 'pos');
+      if (state.latestPosSnapshotEvent) {
+        broadcast(state.latestPosSnapshotEvent, (target) => target.app === 'pos');
+      }
+      const updatedAt = state.latestPosSnapshotEvent?.received_at || state.latestPosSnapshotEvent?.created_at || receivedAt;
       sendJson(response, 200, {
         ok: true,
         duplicate,
         event_id: event.event_id,
+        updated_at: updatedAt,
+        source_device_id: event.source_device_id || null,
         stats: getPosSnapshotStats(event.payload)
       });
     } catch (error) {

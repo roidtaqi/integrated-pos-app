@@ -1,5 +1,6 @@
 import { db, type AppSetting, type SyncQueue } from './db';
 import { productService } from './productService';
+import { authService } from './authService';
 
 type ConnectionStatus = 'DISABLED' | 'CONNECTING' | 'CONNECTED' | 'OFFLINE' | 'ERROR';
 
@@ -11,13 +12,31 @@ interface RealtimeConfig {
 
 const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://pos-server.up.railway.app';
 const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || 'kastur-sync-2026-Roid-Nawir-8xAq72Lm';
-const DEVICE_SETTING_KEYS = new Set(['realtime_enabled', 'realtime_url', 'realtime_api_token']);
+const LAST_POS_SNAPSHOT_SETTING = 'pos_cloud_snapshot_updated_at';
+const POS_DEVICE_ID_SETTING = 'pos_cloud_device_id';
+const POS_LOCAL_DIRTY_SETTING = 'pos_cloud_local_dirty';
+const DEVICE_SETTING_KEYS = new Set([
+  'realtime_enabled',
+  'realtime_url',
+  'realtime_api_token',
+  LAST_POS_SNAPSHOT_SETTING,
+  POS_DEVICE_ID_SETTING,
+  POS_LOCAL_DIRTY_SETTING
+]);
+const DEFAULT_AUTO_PULL_INTERVAL_MS = 120000;
+const DEFAULT_AUTO_PUSH_INTERVAL_MS = 60000;
+const MIN_AUTO_PULL_INTERVAL_MS = 30000;
+const MIN_AUTO_PUSH_INTERVAL_MS = 15000;
 const listeners = new Set<(status: ConnectionStatus) => void>();
 
 let socket: WebSocket | null = null;
 let status: ConnectionStatus = 'DISABLED';
 let reconnectTimer: number | undefined;
 let cloudBackupTimer: number | undefined;
+let cloudPullTimer: number | undefined;
+let cloudPushTimer: number | undefined;
+let cloudRestoreRunning = false;
+let cloudBackupRunning = false;
 let manualClose = false;
 
 function emit(nextStatus: ConnectionStatus) {
@@ -40,6 +59,31 @@ function toHttpUrl(url: string) {
   return trimmed;
 }
 
+function getAutoPullIntervalMs() {
+  const parsed = Number(import.meta.env.VITE_POS_CLOUD_PULL_INTERVAL_MS || DEFAULT_AUTO_PULL_INTERVAL_MS);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_AUTO_PULL_INTERVAL_MS;
+  return Math.max(MIN_AUTO_PULL_INTERVAL_MS, parsed);
+}
+
+function getAutoPushIntervalMs() {
+  const parsed = Number(import.meta.env.VITE_POS_CLOUD_PUSH_INTERVAL_MS || DEFAULT_AUTO_PUSH_INTERVAL_MS);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_AUTO_PUSH_INTERVAL_MS;
+  return Math.max(MIN_AUTO_PUSH_INTERVAL_MS, parsed);
+}
+
+async function getDeviceId() {
+  const existing = await db.app_settings.get(POS_DEVICE_ID_SETTING);
+  if (existing?.value) return existing.value;
+
+  const deviceId = `pos_${crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`;
+  await db.app_settings.put({
+    key: POS_DEVICE_ID_SETTING,
+    value: deviceId,
+    updated_at: new Date().toISOString()
+  });
+  return deviceId;
+}
+
 async function logSync(message: string, ok = true, type: 'EXPORT_SALES' | 'CLOUD_BACKUP' | 'CLOUD_RESTORE' | 'CLOUD_CATALOG' = 'EXPORT_SALES', records = 0) {
   await db.sync_logs.add({
     id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
@@ -53,10 +97,12 @@ async function logSync(message: string, ok = true, type: 'EXPORT_SALES' | 'CLOUD
 
 async function buildPosSnapshot() {
   const appSettings = (await db.app_settings.toArray()).filter((setting) => !DEVICE_SETTING_KEYS.has(setting.key));
+  const deviceId = await getDeviceId();
 
   return {
     schemaVersion: 1,
     exportedAt: new Date().toISOString(),
+    sourceDeviceId: deviceId,
     users: await db.users.toArray(),
     roles: await db.roles.toArray(),
     permissions: await db.permissions.toArray(),
@@ -203,15 +249,22 @@ async function markQueueAccepted(eventId: string) {
       await db.transactions.update(queued.entity_id, { sync_status: 'SYNCED' });
     }
   });
+
+  await setLocalDirty(true);
+  scheduleCloudBackup();
 }
 
-async function handleServerState(message: { latest_catalog?: unknown }) {
+async function handleServerState(message: { latest_catalog?: unknown; latest_pos_snapshot?: { source_device_id?: string; payload?: unknown } | null }) {
   const latestCatalog = message.latest_catalog as { payload?: unknown } | null | undefined;
-  if (!latestCatalog?.payload) return;
+  if (latestCatalog?.payload) {
+    const result = await productService.importProductsFromJson(latestCatalog.payload as Parameters<typeof productService.importProductsFromJson>[0]);
+    if (result.success) {
+      await logSync(`Realtime catalog diterima: ${result.count} produk`);
+    }
+  }
 
-  const result = await productService.importProductsFromJson(latestCatalog.payload as Parameters<typeof productService.importProductsFromJson>[0]);
-  if (result.success) {
-    await logSync(`Realtime catalog diterima: ${result.count} produk`);
+  if (message.latest_pos_snapshot?.payload) {
+    await handleRemotePosSnapshot(message.latest_pos_snapshot.source_device_id);
   }
 }
 
@@ -222,6 +275,13 @@ async function handleCatalogSnapshot(message: { payload?: unknown }) {
   if (result.success) {
     await logSync(`Realtime catalog update diterapkan: ${result.count} produk`);
   }
+}
+
+async function handleRemotePosSnapshot(sourceDeviceId?: string) {
+  if (sourceDeviceId && sourceDeviceId === await getDeviceId()) return;
+  if (await hasPendingLocalSync()) return;
+
+  await realtimeSyncService.pullCloudPosSnapshot(undefined, undefined, { automated: true });
 }
 
 function send(message: unknown) {
@@ -268,14 +328,52 @@ function scheduleReconnect() {
 function scheduleCloudBackup() {
   window.clearTimeout(cloudBackupTimer);
   cloudBackupTimer = window.setTimeout(() => {
-    void realtimeSyncService.pushCloudPosSnapshot().catch((error) => {
+    void realtimeSyncService.pushCloudPosSnapshot(undefined, undefined, { automated: true }).catch((error) => {
       console.error(error);
       void logSync('Backup otomatis POS ke cloud gagal', false, 'CLOUD_BACKUP');
     });
   }, 1500);
 }
 
+async function hasPendingLocalSync() {
+  const [pendingTransactions, pendingQueue] = await Promise.all([
+    db.transactions.where('sync_status').equals('PENDING').count(),
+    db.sync_queue.where('status').equals('PENDING').count()
+  ]);
+
+  return pendingTransactions > 0 || pendingQueue > 0;
+}
+
+async function getLastSeenCloudSnapshot() {
+  return (await db.app_settings.get(LAST_POS_SNAPSHOT_SETTING))?.value || '';
+}
+
+async function setLocalDirty(dirty: boolean) {
+  await db.app_settings.put({
+    key: POS_LOCAL_DIRTY_SETTING,
+    value: String(dirty),
+    updated_at: new Date().toISOString()
+  });
+}
+
+async function isLocalDirty() {
+  return (await db.app_settings.get(POS_LOCAL_DIRTY_SETTING))?.value === 'true';
+}
+
+async function setLastSeenCloudSnapshot(updatedAt?: string | null) {
+  if (!updatedAt) return;
+
+  await db.app_settings.put({
+    key: LAST_POS_SNAPSHOT_SETTING,
+    value: updatedAt,
+    updated_at: new Date().toISOString()
+  });
+}
+
 export const realtimeSyncService = {
+  getAutoPullIntervalMs,
+  getAutoPushIntervalMs,
+
   async getConfig(): Promise<RealtimeConfig> {
     return {
       enabled: true,
@@ -309,6 +407,48 @@ export const realtimeSyncService = {
     if (config.enabled) {
       await this.connect(config.url);
     }
+    this.startAutoCloudPull();
+    this.startAutoCloudPush();
+  },
+
+  startAutoCloudPull() {
+    window.clearInterval(cloudPullTimer);
+    const intervalMs = getAutoPullIntervalMs();
+
+    void this.pullCloudPosSnapshot(undefined, undefined, { automated: true }).catch((error) => {
+      console.error(error);
+    });
+
+    cloudPullTimer = window.setInterval(() => {
+      void this.pullCloudPosSnapshot(undefined, undefined, { automated: true }).catch((error) => {
+        console.error(error);
+      });
+    }, intervalMs);
+  },
+
+  stopAutoCloudPull() {
+    window.clearInterval(cloudPullTimer);
+    cloudPullTimer = undefined;
+  },
+
+  startAutoCloudPush() {
+    window.clearInterval(cloudPushTimer);
+    const intervalMs = getAutoPushIntervalMs();
+
+    void this.pushCloudPosSnapshot(undefined, undefined, { automated: true }).catch((error) => {
+      console.error(error);
+    });
+
+    cloudPushTimer = window.setInterval(() => {
+      void this.pushCloudPosSnapshot(undefined, undefined, { automated: true }).catch((error) => {
+        console.error(error);
+      });
+    }, intervalMs);
+  },
+
+  stopAutoCloudPush() {
+    window.clearInterval(cloudPushTimer);
+    cloudPushTimer = undefined;
   },
 
   async connect(customUrl?: string) {
@@ -340,6 +480,7 @@ export const realtimeSyncService = {
 
       if (message.type === 'server.state') void handleServerState(message);
       if (message.type === 'catalog.snapshot') void handleCatalogSnapshot(message);
+      if (message.type === 'pos.snapshot') void handleRemotePosSnapshot(message.source_device_id);
       if (message.type === 'ack' && message.event_id) void markQueueAccepted(message.event_id);
       if (message.type === 'error') void logSync(message.message || 'Realtime sync error', false);
     });
@@ -391,73 +532,123 @@ export const realtimeSyncService = {
     return result;
   },
 
-  async pushCloudPosSnapshot(customUrl?: string, customToken?: string) {
+  async pushCloudPosSnapshot(customUrl?: string, customToken?: string, options: { automated?: boolean } = {}) {
+    if (cloudBackupRunning) {
+      return { success: false, skipped: true, records: 0, message: 'Backup cloud sedang berjalan.' };
+    }
+
+    if (options.automated && !await isLocalDirty()) {
+      return { success: true, skipped: true, records: 0, message: 'Tidak ada perubahan lokal untuk di-upload.' };
+    }
+
     const config = await this.getConfig();
     const baseUrl = toHttpUrl(customUrl || config.url);
     const apiToken = customToken ?? config.apiToken;
     const snapshot = await buildPosSnapshot();
     const records = countSnapshotRecords(snapshot);
+    const deviceId = await getDeviceId();
+    cloudBackupRunning = true;
 
-    const response = await fetch(`${baseUrl}/api/pos/snapshot`, {
-      method: 'PUT',
-      headers: {
-        'content-type': 'application/json',
-        ...(apiToken ? { 'x-sync-token': apiToken } : {})
-      },
-      body: JSON.stringify({
-        source: 'integrated-pos-app',
-        payload: snapshot,
-        created_at: new Date().toISOString()
-      })
-    });
+    try {
+      const response = await fetch(`${baseUrl}/api/pos/snapshot`, {
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json',
+          ...(apiToken ? { 'x-sync-token': apiToken } : {})
+        },
+        body: JSON.stringify({
+          source: 'integrated-pos-app',
+          source_device_id: deviceId,
+          payload: snapshot,
+          created_at: new Date().toISOString()
+        })
+      });
 
-    if (!response.ok) {
-      throw new Error(`Cloud POS backup gagal: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Cloud POS backup gagal: ${response.status}`);
+      }
+
+      const data = await response.json();
+      await setLocalDirty(false);
+      await setLastSeenCloudSnapshot(data.updated_at);
+      await logSync(`${options.automated ? 'Auto backup' : 'Semua data POS'} tersimpan ke cloud: ${records} records`, true, 'CLOUD_BACKUP', records);
+      return {
+        success: true,
+        records,
+        transactions: snapshot.transactions.length,
+        shifts: snapshot.shifts.length,
+        cashMovements: snapshot.cashMovements.length,
+        customers: snapshot.customers.length,
+        products: snapshot.products.length
+      };
+    } finally {
+      cloudBackupRunning = false;
     }
-
-    await logSync(`Semua data POS tersimpan ke cloud: ${records} records`, true, 'CLOUD_BACKUP', records);
-    return {
-      success: true,
-      records,
-      transactions: snapshot.transactions.length,
-      shifts: snapshot.shifts.length,
-      cashMovements: snapshot.cashMovements.length,
-      customers: snapshot.customers.length,
-      products: snapshot.products.length
-    };
   },
 
-  async pullCloudPosSnapshot(customUrl?: string, customToken?: string) {
+  async pullCloudPosSnapshot(customUrl?: string, customToken?: string, options: { automated?: boolean } = {}) {
+    if (cloudRestoreRunning) {
+      return { success: false, skipped: true, records: 0, message: 'Restore cloud sedang berjalan.' };
+    }
+
+    if (options.automated && await isLocalDirty()) {
+      return { success: false, skipped: true, records: 0, message: 'Auto pull dilewati karena perubahan lokal belum ter-upload.' };
+    }
+
+    if (options.automated && await hasPendingLocalSync()) {
+      return { success: false, skipped: true, records: 0, message: 'Auto pull dilewati karena masih ada data lokal pending.' };
+    }
+
     const config = await this.getConfig();
     const baseUrl = toHttpUrl(customUrl || config.url);
     const apiToken = customToken ?? config.apiToken;
+    cloudRestoreRunning = true;
 
-    const response = await fetch(`${baseUrl}/api/pos/snapshot`, {
-      headers: apiToken ? { 'x-sync-token': apiToken } : undefined
-    });
+    try {
+      const response = await fetch(`${baseUrl}/api/pos/snapshot`, {
+        headers: apiToken ? { 'x-sync-token': apiToken } : undefined
+      });
 
-    if (!response.ok) {
-      throw new Error(`Cloud POS restore gagal: ${response.status}`);
+      if (!response.ok) {
+        throw new Error(`Cloud POS restore gagal: ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (!data.snapshot) {
+        return { success: false, records: 0, message: 'Cloud belum memiliki backup POS.' };
+      }
+
+      const updatedAt = data.updated_at as string | null | undefined;
+      if (options.automated && updatedAt && updatedAt === await getLastSeenCloudSnapshot()) {
+        return { success: true, skipped: true, records: 0, message: 'Cloud belum berubah.' };
+      }
+
+      const result = await importPosSnapshot(data.snapshot);
+      await setLastSeenCloudSnapshot(updatedAt);
+      await setLocalDirty(false);
+      await authService.refreshCurrentUser();
+      await logSync(
+        `${options.automated ? 'Auto sync' : 'Semua data POS'} diambil dari cloud: ${result.records} records`,
+        true,
+        'CLOUD_RESTORE',
+        result.records
+      );
+      return { success: true, ...result };
+    } finally {
+      cloudRestoreRunning = false;
     }
-
-    const data = await response.json();
-    if (!data.snapshot) {
-      return { success: false, records: 0, message: 'Cloud belum memiliki backup POS.' };
-    }
-
-    const result = await importPosSnapshot(data.snapshot);
-    await logSync(`Semua data POS diambil dari cloud: ${result.records} records`, true, 'CLOUD_RESTORE', result.records);
-    return { success: true, ...result };
   }
 };
 
 if (typeof window !== 'undefined') {
   window.addEventListener('pos-sync-queue-created', () => {
+    void setLocalDirty(true);
     void publishPendingQueue();
     scheduleCloudBackup();
   });
 
   window.addEventListener('pos-data-changed', () => {
+    void setLocalDirty(true);
     scheduleCloudBackup();
   });
 }

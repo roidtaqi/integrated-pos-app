@@ -100,6 +100,8 @@ export default function Sync() {
       const config = await realtimeSyncService.getConfig();
       await realtimeSyncService.saveConfig(config);
       await realtimeSyncService.connect(config.url);
+      realtimeSyncService.startAutoCloudPull();
+      realtimeSyncService.startAutoCloudPush();
       toast.success('POS terhubung ke Kastur Cloud.');
     } catch (error) {
       console.error(error);
@@ -214,6 +216,13 @@ export default function Sync() {
       : connectionStatus === 'ERROR'
         ? 'bg-danger/10 text-danger'
         : 'bg-slate-100 text-slate-600';
+  const formatIntervalLabel = (intervalMs: number) => intervalMs < 60000
+    ? `${Math.round(intervalMs / 1000)} detik`
+    : `${Math.round(intervalMs / 60000)} menit`;
+  const autoPullIntervalMs = realtimeSyncService.getAutoPullIntervalMs();
+  const autoPushIntervalMs = realtimeSyncService.getAutoPushIntervalMs();
+  const autoPullLabel = formatIntervalLabel(autoPullIntervalMs);
+  const autoPushLabel = formatIntervalLabel(autoPushIntervalMs);
 
   return (
     <div className="h-full overflow-y-auto px-3 py-4 pb-24 sm:px-6 sm:py-6 md:pb-6">
@@ -245,7 +254,7 @@ export default function Sync() {
             </div>
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="text-[11px] font-bold uppercase text-slate-400">Mode</p>
-              <p className="mt-2 text-sm font-extrabold text-emerald-700">Otomatis</p>
+              <p className="mt-1 text-sm font-extrabold text-emerald-700">Auto Sync</p>
             </div>
           </div>
 
@@ -284,7 +293,7 @@ export default function Sync() {
               <div className="min-w-0 flex-1">
                 <h3 className="font-bold text-emerald-900">Data POS Cloud</h3>
                 <p className="mt-1 text-sm text-emerald-800">
-                  Menyimpan penjualan, pembayaran, shift, kas, stok, pelanggan, user, outlet, audit, dan settings toko.
+                  Menyimpan penjualan, pembayaran, shift, kas, stok, pelanggan, user, outlet, audit, dan settings toko. POS otomatis upload perubahan setiap {autoPushLabel}, lalu mengambil data cloud setiap {autoPullLabel} saat device aman untuk di-update.
                 </p>
               </div>
             </div>
