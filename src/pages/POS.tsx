@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Banknote,
+  ChevronDown,
   CreditCard,
   Package,
   Printer,
@@ -46,6 +47,7 @@ const paymentMethods: { method: PaymentMethod; label: string; icon: typeof Bankn
 export default function POS() {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentModal, setPaymentModal] = useState(false);
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('cash');
@@ -57,6 +59,7 @@ export default function POS() {
 
   const receiptRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const cartClosedByUserRef = useRef(false);
   const user = authService.getCurrentUser();
   const canDiscount = authService.hasPermission('discount:apply');
   const liveProducts = useLiveQuery(() => productService.getActiveProductsWithUnits(), []);
@@ -121,6 +124,10 @@ export default function POS() {
         }
       ];
     });
+
+    if (!cartClosedByUserRef.current) {
+      setIsCartOpen(true);
+    }
   };
 
   const handleSearchEnter = async () => {
@@ -183,6 +190,18 @@ export default function POS() {
     setCart([]);
     setTransactionDiscount(0);
     setPaymentSplits([]);
+    setIsCartOpen(false);
+    cartClosedByUserRef.current = false;
+  };
+
+  const openCart = () => {
+    setIsCartOpen(true);
+    cartClosedByUserRef.current = false;
+  };
+
+  const closeCart = () => {
+    setIsCartOpen(false);
+    cartClosedByUserRef.current = true;
   };
 
   const initiateCheckout = async () => {
@@ -368,22 +387,59 @@ export default function POS() {
         </div>
       </div>
 
+      {cart.length > 0 && !isCartOpen && (
+        <button
+          type="button"
+          onClick={openCart}
+          className="absolute bottom-3 left-3 right-3 z-20 flex min-h-14 items-center justify-between rounded-2xl bg-slate-900 px-4 py-3 text-left text-white shadow-xl lg:hidden"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/10">
+              <ShoppingCart size={20} />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-xs font-bold uppercase text-white/60">Pesanan</span>
+              <span className="block truncate text-sm font-extrabold">{totalItems} item</span>
+            </span>
+          </span>
+          <span className="shrink-0 text-right">
+            <span className="block text-xs font-bold uppercase text-white/60">Total</span>
+            <span className="block text-sm font-extrabold">{formatRupiah(total)}</span>
+          </span>
+        </button>
+      )}
+
       <div className={`
-        ${cart.length > 0 ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
+        ${cart.length > 0 && isCartOpen ? 'translate-y-0' : 'translate-y-full lg:translate-y-0'}
         absolute lg:static bottom-0 left-0 w-full lg:w-[420px] h-[78vh] lg:h-full
         flex flex-col bg-white shadow-2xl lg:shadow-lg z-30 transition-transform duration-300 rounded-t-3xl lg:rounded-none
       `}>
-        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mt-3 mb-1 lg:hidden shrink-0" />
+        <button
+          type="button"
+          onClick={closeCart}
+          className="mx-auto mt-3 mb-1 flex h-8 w-20 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700 lg:hidden"
+          title="Tutup keranjang"
+        >
+          <ChevronDown size={24} />
+        </button>
 
         <div className="h-14 lg:h-20 px-4 lg:px-6 flex items-center justify-between border-b border-slate-200 bg-slate-50/60 shrink-0">
           <h2 className="text-base lg:text-lg font-bold flex items-center gap-2 text-slate-800">
             <ShoppingCart size={20} className="text-primary-700" /> Pesanan ({totalItems})
           </h2>
-          {cart.length > 0 && (
-            <button onClick={clearCart} className="text-danger hover:text-danger/80 text-sm font-medium flex items-center gap-1 bg-danger/10 px-3 py-1.5 rounded-lg transition-colors">
-              <Trash2 size={16} /> Kosongkan
+          <div className="flex items-center gap-2">
+            <button
+              onClick={closeCart}
+              className="flex items-center gap-1 rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-200 lg:hidden"
+            >
+              <ChevronDown size={16} /> Tutup
             </button>
-          )}
+            {cart.length > 0 && (
+              <button onClick={clearCart} className="text-danger hover:text-danger/80 text-sm font-medium flex items-center gap-1 bg-danger/10 px-3 py-1.5 rounded-lg transition-colors">
+                <Trash2 size={16} /> Kosongkan
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
