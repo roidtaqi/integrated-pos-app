@@ -388,13 +388,6 @@ export default function Sync() {
           </div>
         )}
 
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
-              <Server size={20} />
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   );
