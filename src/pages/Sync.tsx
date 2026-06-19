@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertCircle, CheckCircle, CloudDownload, CloudUpload, Database, FileJson, FolderUp, RefreshCw, Server, Upload, Wifi } from 'lucide-react';
+import { AlertCircle, CheckCircle, CloudDownload, CloudUpload, Database, FileJson, FolderUp, RefreshCw, Upload, Wifi } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productService } from '../services/productService';
 import { syncService } from '../services/syncService';
