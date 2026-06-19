@@ -393,12 +393,6 @@ export default function Sync() {
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
               <Server size={20} />
             </div>
-            <div className="min-w-0">
-              <h2 className="font-bold text-slate-900">Monitoring Sinkronisasi</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Riwayat detail tidak ditampilkan di POS agar halaman ini tetap ringkas. Gunakan dashboard/log Railway untuk mengecek aktivitas `pos-server`, error API, dan status database PostgreSQL.
-              </p>
-            </div>
           </div>
         </section>
       </div>
