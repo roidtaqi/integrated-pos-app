@@ -7,6 +7,7 @@ import {
   RefreshCw,
   Settings,
   ShoppingCart,
+  BriefcaseBusiness,
   UserRound,
   Users
 } from 'lucide-react';
@@ -26,6 +27,7 @@ export const navItems: {
   { name: 'Laporan', path: '/reports', icon: BarChart3, permission: 'reports:view' },
   { name: 'Pelanggan', path: '/customers', icon: Users, permission: 'customers:manage' },
   { name: 'Sinkronisasi', path: '/sync', icon: RefreshCw, permission: 'sync:manage' },
+  { name: 'Karyawan', path: '/employees', icon: BriefcaseBusiness, permission: 'users:manage' },
   { name: 'Pengaturan', path: '/settings', icon: Settings, permission: 'settings:manage' },
   { name: 'Profil', path: '/profile', icon: UserRound }
 ];

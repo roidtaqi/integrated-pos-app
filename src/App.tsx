@@ -12,6 +12,7 @@ import Login from './pages/Login';
 import Shift from './pages/Shift';
 import Customers from './pages/Customers';
 import Settings from './pages/Settings';
+import Employees from './pages/Employees';
 import Profile from './pages/Profile';
 import More from './pages/More';
 import { authService } from './services/authService';
@@ -51,6 +52,7 @@ function App() {
             <Route path="customers" element={<PermissionGate permission="customers:manage"><Customers /></PermissionGate>} />
             <Route path="sync" element={<PermissionGate permission="sync:manage"><Sync /></PermissionGate>} />
             <Route path="settings" element={<PermissionGate permission="settings:manage"><Settings /></PermissionGate>} />
+            <Route path="employees" element={<PermissionGate permission="users:manage"><Employees /></PermissionGate>} />
             <Route path="profile" element={<Profile />} />
             <Route path="more" element={<More />} />
           </Route>
