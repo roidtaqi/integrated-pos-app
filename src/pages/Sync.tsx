@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { AlertCircle, CheckCircle, CloudDownload, CloudUpload, Database, Download, FileJson, FolderUp, RefreshCw, Upload, Wifi } from 'lucide-react';
+import { AlertCircle, CheckCircle, CloudDownload, CloudUpload, Database, FileJson, FolderUp, RefreshCw, Server, Upload, Wifi } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { productService } from '../services/productService';
 import { syncService } from '../services/syncService';
 import { realtimeSyncService } from '../services/realtimeSyncService';
-import { formatDateTime } from '../utils/format';
 import { authService } from '../services/authService';
 
 export default function Sync() {
@@ -22,7 +21,6 @@ export default function Sync() {
 
   const pendingTx = useLiveQuery(() => syncService.getPendingTransactions(), []) || [];
   const pendingQueue = useLiveQuery(() => syncService.getPendingQueue(), []) || [];
-  const syncLogs = useLiveQuery(() => syncService.getSyncLogs(), []) || [];
 
   useEffect(() => {
     const unsubscribe = realtimeSyncService.subscribe(setConnectionStatus);
@@ -229,7 +227,7 @@ export default function Sync() {
       <div className="mx-auto flex max-w-6xl flex-col gap-4 sm:gap-5">
         <div>
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Sinkronisasi</h1>
-          <p className="mt-1 text-sm text-slate-500">Catalog, transaksi pending, dan riwayat sync.</p>
+          <p className="mt-1 text-sm text-slate-500">Status cloud, transaksi pending, dan backup data POS.</p>
         </div>
 
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
@@ -390,66 +388,18 @@ export default function Sync() {
           </div>
         )}
 
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-slate-200 p-4 sm:p-5">
-            <h2 className="font-bold text-slate-900">Riwayat Sinkronisasi</h2>
-            <Download size={18} className="text-slate-400" />
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700">
+              <Server size={20} />
+            </div>
+            <div className="min-w-0">
+              <h2 className="font-bold text-slate-900">Monitoring Sinkronisasi</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Riwayat detail tidak ditampilkan di POS agar halaman ini tetap ringkas. Gunakan dashboard/log Railway untuk mengecek aktivitas `pos-server`, error API, dan status database PostgreSQL.
+              </p>
+            </div>
           </div>
-
-          {syncLogs.length === 0 ? (
-            <p className="p-8 text-center text-sm text-slate-500">Belum ada riwayat sinkronisasi.</p>
-          ) : (
-            <>
-              <div className="divide-y divide-slate-200 md:hidden">
-                {syncLogs.map((log) => (
-                  <div key={log.id} className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate font-bold text-slate-900">{log.type}</p>
-                        <p className="mt-1 text-xs text-slate-500">{formatDateTime(log.created_at)}</p>
-                      </div>
-                      <span className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-bold ${log.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-700' : 'bg-danger/10 text-danger'}`}>
-                        {log.status}
-                      </span>
-                    </div>
-                    <div className="mt-3 rounded-lg bg-slate-50 p-3">
-                      <p className="text-xs font-bold text-slate-400">Records: {log.records_processed}</p>
-                      <p className="mt-1 text-sm text-slate-600">{log.message}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[720px] border-collapse text-left">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-sm font-bold text-slate-500">
-                      <th className="p-4">Waktu</th>
-                      <th className="p-4">Tipe</th>
-                      <th className="p-4">Status</th>
-                      <th className="p-4">Records</th>
-                      <th className="p-4">Pesan</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 text-sm">
-                    {syncLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-slate-50">
-                        <td className="p-4 text-slate-500">{formatDateTime(log.created_at)}</td>
-                        <td className="p-4 font-bold">{log.type}</td>
-                        <td className="p-4">
-                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${log.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-700' : 'bg-danger/10 text-danger'}`}>
-                            {log.status}
-                          </span>
-                        </td>
-                        <td className="p-4">{log.records_processed}</td>
-                        <td className="p-4 text-slate-600">{log.message}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
         </section>
       </div>
     </div>
