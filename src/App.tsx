@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { type ReactNode, useEffect, useRef } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
@@ -33,9 +33,76 @@ function PermissionGate({ permission, children }: { permission: PermissionCode; 
   return <>{children}</>;
 }
 
+function SimpleBackBehavior({ homePath }: { homePath: string }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const currentPathRef = useRef(location.pathname);
+  const skipDuplicateHomeRef = useRef(false);
+
+  useEffect(() => {
+    currentPathRef.current = location.pathname;
+    if (location.pathname !== homePath) {
+      skipDuplicateHomeRef.current = false;
+    }
+  }, [homePath, location.pathname]);
+
+  useEffect(() => {
+    const isHomePath = (path: string) => path === homePath;
+    const shouldIgnorePath = (path: string) => path === '/login';
+
+    const handlePopState = () => {
+      window.setTimeout(() => {
+        const path = window.location.pathname;
+        if (shouldIgnorePath(path)) return;
+
+        if (!isHomePath(path)) {
+          skipDuplicateHomeRef.current = true;
+          navigate(homePath, { replace: true });
+          return;
+        }
+
+        if (skipDuplicateHomeRef.current) {
+          skipDuplicateHomeRef.current = false;
+          window.setTimeout(() => window.history.back(), 0);
+        }
+      }, 0);
+    };
+
+    const handleDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const target = event.target as Element | null;
+      const anchor = target?.closest('a[href]') as HTMLAnchorElement | null;
+      if (!anchor || anchor.target || anchor.hasAttribute('download')) return;
+
+      const url = new URL(anchor.href, window.location.href);
+      if (url.origin !== window.location.origin) return;
+      if (shouldIgnorePath(url.pathname)) return;
+
+      const targetPath = `${url.pathname}${url.search}${url.hash}`;
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      if (targetPath === currentPath) return;
+
+      event.preventDefault();
+      const shouldReplace = !isHomePath(currentPathRef.current) && !isHomePath(url.pathname);
+      navigate(targetPath, { replace: shouldReplace });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    document.addEventListener('click', handleDocumentClick, true);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      document.removeEventListener('click', handleDocumentClick, true);
+    };
+  }, [homePath, navigate]);
+
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <SimpleBackBehavior homePath="/pos" />
       <Toaster position="top-center" toastOptions={{ duration: 3000, style: { borderRadius: '10px', background: '#333', color: '#fff' } }} />
       <Routes>
         <Route path="/login" element={<Login />} />
