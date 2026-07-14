@@ -5,8 +5,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-COPY sync-server ./sync-server
+COPY server.mjs ./server.mjs
 
 ENV NODE_ENV=production
+ENV PORT=8787
 
-CMD ["npm", "run", "sync:server"]
+EXPOSE 8787
+
+CMD ["npm", "start"]

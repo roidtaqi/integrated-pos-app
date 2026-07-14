@@ -45,6 +45,10 @@ npm run build
 npm run preview
 ```
 
+## Deployment Gratis Tanpa Kartu Kredit
+
+Untuk deployment nol rupiah, gunakan Cloudflare Pages untuk kedua frontend, Back4app Container untuk sync server, dan Neon untuk PostgreSQL. Ikuti [DEPLOY_FREE.md](DEPLOY_FREE.md). Konfigurasi ini tidak memerlukan Render Blueprint atau Railway.
+
 ## Deploy ke Railway
 
 Inventory Pricing App sudah bisa berjalan sendiri di Railway, misalnya:
