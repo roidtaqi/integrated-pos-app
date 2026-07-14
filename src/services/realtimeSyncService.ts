@@ -10,8 +10,8 @@ interface RealtimeConfig {
   apiToken?: string;
 }
 
-const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://pos-server.up.railway.app';
-const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || 'kastur-sync-2026-Roid-Nawir-8xAq72Lm';
+const DEFAULT_URL = import.meta.env.VITE_SYNC_URL || 'wss://integrated-pos-sync-server.onrender.com';
+const DEFAULT_API_TOKEN = import.meta.env.VITE_SYNC_API_TOKEN || '';
 const LAST_POS_SNAPSHOT_SETTING = 'pos_cloud_snapshot_updated_at';
 const POS_DEVICE_ID_SETTING = 'pos_cloud_device_id';
 const POS_LOCAL_DIRTY_SETTING = 'pos_cloud_local_dirty';

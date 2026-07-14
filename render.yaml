@@ -5,6 +5,14 @@ services:
     repo: https://github.com/roidtaqi/inventory-pricing-app.git
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SYNC_URL
+        value: wss://integrated-pos-sync-server.onrender.com
+      - key: VITE_SYNC_API_TOKEN
+        fromService:
+          name: integrated-pos-sync-server
+          type: web
+          envVarKey: SYNC_API_TOKEN
     routes:
       - type: rewrite
         source: /*
@@ -22,6 +30,14 @@ services:
     runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SYNC_URL
+        value: wss://integrated-pos-sync-server.onrender.com
+      - key: VITE_SYNC_API_TOKEN
+        fromService:
+          name: integrated-pos-sync-server
+          type: web
+          envVarKey: SYNC_API_TOKEN
     routes:
       - type: rewrite
         source: /*
@@ -45,3 +61,16 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: SYNC_API_TOKEN
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kastur-postgres
+          property: connectionString
+
+databases:
+  - name: kastur-postgres
+    plan: free
+    region: singapore
+    databaseName: kastur
+    user: kastur

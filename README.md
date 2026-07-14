@@ -28,7 +28,7 @@ npm run sync:server
 Default production WebSocket URL:
 
 ```txt
-wss://pos-server.up.railway.app
+wss://integrated-pos-sync-server.onrender.com
 ```
 
 Untuk development lokal, buat `.env.local` sebelum menjalankan `npm run dev`:
@@ -101,7 +101,7 @@ Karena Inventory dan POS berjalan di HTTPS, URL sync harus memakai `wss://`, buk
 Default production POS sudah diarahkan ke server Kastur:
 
 ```txt
-wss://pos-server.up.railway.app
+wss://integrated-pos-sync-server.onrender.com
 ```
 
 Kastur POS tidak menampilkan input URL/token ke user kasir. POS otomatis connect memakai konfigurasi build aplikasi.
@@ -109,7 +109,7 @@ Kastur POS tidak menampilkan input URL/token ke user kasir. POS otomatis connect
 Jika suatu saat sync server pindah URL atau token diganti, ubah variable build di service frontend POS lalu redeploy:
 
 ```txt
-VITE_SYNC_URL=wss://domain-sync-baru.up.railway.app
+VITE_SYNC_URL=wss://domain-sync-baru.onrender.com
 VITE_SYNC_API_TOKEN=token-yang-sama-dengan-sync-server
 VITE_POS_CLOUD_PULL_INTERVAL_MS=120000
 VITE_POS_CLOUD_PUSH_INTERVAL_MS=60000
@@ -151,7 +151,7 @@ GET /api/state
 Alur praktis:
 
 1. Di Inventory laptop, buka `Home -> Data & Pengaturan -> Sync`.
-2. Isi URL sync server, misalnya `wss://pos-server.up.railway.app`.
+2. URL sync server pada deployment Render sudah diatur ke `wss://integrated-pos-sync-server.onrender.com`.
 3. Klik `Upload Cloud`.
 4. Di Inventory HP, isi URL yang sama.
 5. Klik `Ambil Cloud`.
@@ -181,7 +181,7 @@ SYNC_API_TOKEN=isi-token-rahasia
 
 Lalu isi token yang sama di halaman Sync Inventory. POS mengambil token dari konfigurasi build `VITE_SYNC_API_TOKEN`.
 
-### Railway PostgreSQL
+### PostgreSQL Cloud
 
 Untuk membuat snapshot cloud lebih tahan restart/redeploy, pasang PostgreSQL ke service sync server dan pastikan env berikut tersedia:
 
@@ -218,33 +218,40 @@ Lalu mount volume ke:
 /data
 ```
 
-## Deploy Gratis ke Render
+## Deploy dan Migrasi ke Render
 
-Repo ini menyediakan `render.yaml` untuk deploy tiga service sekaligus:
+`render.yaml` membuat empat resource yang setara dengan susunan Railway:
 
-- `inventory-pricing-app` dari repo `roidtaqi/inventory-pricing-app` sebagai Render Static Site.
-- `integrated-pos-app` sebagai Render Static Site.
-- `integrated-pos-sync-server` sebagai Render Free Web Service untuk realtime WebSocket sync.
+- `inventory-pricing-app`: Static Site dari repo `roidtaqi/inventory-pricing-app`.
+- `integrated-pos-app`: Static Site POS.
+- `integrated-pos-sync-server`: Web Service untuk HTTP API dan WebSocket.
+- `kastur-postgres`: PostgreSQL utama yang terhubung otomatis melalui `DATABASE_URL`.
 
-Langkah:
+Deploy awal:
 
-1. Push repo `inventory-pricing-app` dan `integrated-pos-app` ke GitHub.
-2. Buka Render Dashboard.
-3. Pilih `New -> Blueprint`.
-4. Pilih repo `roidtaqi/integrated-pos-app`.
-5. Pastikan Blueprint Path memakai `render.yaml`.
-6. Klik `Apply` / `Deploy Blueprint`.
-7. Setelah deploy selesai, buka service `integrated-pos-sync-server`.
-8. Salin URL Render, misalnya `https://integrated-pos-sync-server.onrender.com`.
-9. Ubah menjadi `wss://integrated-pos-sync-server.onrender.com`.
-10. Masukkan URL `wss://...` itu di halaman Sync Inventory Pricing App.
-11. Untuk POS, set `VITE_SYNC_URL=wss://integrated-pos-sync-server.onrender.com` di service frontend, lalu redeploy.
+1. Push perubahan terbaru kedua repo ke GitHub.
+2. Di Render Dashboard pilih `New -> Blueprint`.
+3. Hubungkan repo `roidtaqi/integrated-pos-app` dan gunakan `render.yaml`.
+4. Tinjau empat resource, lalu pilih `Apply`.
+5. Tunggu health check server berhasil di `https://integrated-pos-sync-server.onrender.com/health`.
+6. Buka kedua frontend dan pastikan status sinkronisasi terhubung.
 
-Catatan Render Free:
+URL dan token sinkronisasi diisi otomatis oleh Blueprint saat build. Token dibuat oleh Render dan tidak disimpan di repository. Jangan menyalin token lama Railway ke source code.
 
-- Web service gratis bisa sleep setelah tidak aktif. Koneksi pertama bisa butuh waktu saat service bangun.
-- Jika sync belum connect, buka `https://integrated-pos-sync-server.onrender.com/health` untuk membangunkan service.
-- State sync server di free service tidak untuk production final karena storage lokal bisa hilang saat restart/redeploy.
+Memindahkan isi PostgreSQL Railway ke Render:
+
+```bash
+pg_dump "$RAILWAY_DATABASE_URL" --format=custom --no-owner --no-acl --file=kastur.dump
+pg_restore --clean --if-exists --no-owner --no-acl --dbname="$RENDER_EXTERNAL_DATABASE_URL" kastur.dump
+```
+
+Ambil `RAILWAY_DATABASE_URL` dari service PostgreSQL Railway dan `RENDER_EXTERNAL_DATABASE_URL` dari halaman Connect database Render. Jalankan restore sebelum memakai aplikasi Render untuk transaksi baru. Pertahankan Railway tetap aktif sampai data, login, produk, shift, transaksi, kas, pelanggan, dan approval sudah diverifikasi di Render.
+
+Catatan paket gratis Render:
+
+- Web Service tidur setelah tidak menerima trafik; koneksi pertama perlu menunggu service aktif kembali.
+- PostgreSQL gratis dibatasi 1 GB, tidak memiliki backup, dan kedaluwarsa setelah 30 hari. Upgrade database sebelum masa berlaku habis jika Render akan menjadi server produksi.
+- Data utama tetap aman di PostgreSQL selama database aktif; filesystem lokal Web Service hanya dipakai sebagai fallback dan tidak boleh dijadikan penyimpanan produksi.
 
 Quality check:
 
