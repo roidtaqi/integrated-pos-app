@@ -3,7 +3,7 @@
   "name": "kastur-sync",
   "main": "src/index.js",
   "compatibility_date": "2026-07-14",
-  "compatibility_flags": ["nodejs_compat", "web_socket_auto_reply_to_close"],
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
     "enabled": true
   },
@@ -18,7 +18,7 @@
   "hyperdrive": [
     {
       "binding": "HYPERDRIVE",
-      "id": "REPLACE_WITH_HYPERDRIVE_ID"
+      "id": "c2d3e21999c74d569250bf7ce878494f"
     }
   ],
   "migrations": [

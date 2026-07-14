@@ -30,13 +30,13 @@ Direct connection string hanya digunakan sekali saat membuat Hyperdrive. Jangan 
 
 ## 2. Buat Hyperdrive
 
-1. Buka Cloudflare Dashboard.
-2. Masuk ke `Workers & Pages -> Hyperdrive`.
-3. Pilih `Create configuration`.
-4. Gunakan nama `kastur-neon` dan database type PostgreSQL.
-5. Masukkan direct connection string Neon.
-6. Simpan, lalu salin Hyperdrive Configuration ID. ID ini bukan password.
-7. Ganti `REPLACE_WITH_HYPERDRIVE_ID` di `cloudflare-sync-server/wrangler.jsonc` dengan ID tersebut dan push ke GitHub.
+Setelah Wrangler login, jalankan alat lokal berikut:
+
+```bash
+bash scripts/create-hyperdrive.sh
+```
+
+Alat membuat konfigurasi `kastur-neon` dengan cache query dinonaktifkan agar sinkronisasi selalu membaca data terbaru. Connection string dan password tidak ditampilkan. Salin Configuration ID dari hasil perintah, ganti `REPLACE_WITH_HYPERDRIVE_ID` di `cloudflare-sync-server/wrangler.jsonc`, lalu push ke GitHub.
 
 ## 3. Deploy Backend Worker
 
