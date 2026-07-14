@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kastur-sync",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-14",
+  "compatibility_flags": ["nodejs_compat", "web_socket_auto_reply_to_close"],
+  "observability": {
+    "enabled": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "SYNC_HUB",
+        "class_name": "SyncHub"
+      }
+    ]
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "REPLACE_WITH_HYPERDRIVE_ID"
+    }
+  ],
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["SyncHub"]
+    }
+  ]
+}

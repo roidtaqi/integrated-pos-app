@@ -28,7 +28,7 @@ npm run sync:server
 Default production WebSocket URL:
 
 ```txt
-wss://integrated-pos-sync-server.onrender.com
+wss://kastur-sync.roidtaqi.workers.dev
 ```
 
 Untuk development lokal, buat `.env.local` sebelum menjalankan `npm run dev`:
@@ -47,7 +47,7 @@ npm run preview
 
 ## Deployment Gratis Tanpa Kartu Kredit
 
-Untuk deployment nol rupiah, gunakan Cloudflare Pages untuk kedua frontend, Back4app Container untuk sync server, dan Neon untuk PostgreSQL. Ikuti [DEPLOY_FREE.md](DEPLOY_FREE.md). Konfigurasi ini tidak memerlukan Render Blueprint atau Railway.
+Untuk deployment nol rupiah, gunakan Cloudflare Workers untuk kedua frontend dan sync server, serta Neon untuk PostgreSQL. Ikuti [DEPLOY_FREE.md](DEPLOY_FREE.md). Konfigurasi ini tidak memerlukan Render, Railway, atau Back4app.
 
 ## Deploy ke Railway
 

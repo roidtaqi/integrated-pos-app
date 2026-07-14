@@ -1,94 +1,103 @@
-# Deployment Gratis Tanpa Kartu Kredit
+# Deployment Gratis Permanen
 
-Susunan deployment:
+Susunan deployment tanpa Railway, Render, atau Back4app:
 
-- Cloudflare Pages: frontend Kastur POS.
-- Cloudflare Pages: frontend Kalkulator Tekad Mandiri.
-- Back4app Containers: HTTP API dan WebSocket sync server.
-- Neon: PostgreSQL utama.
+- `calckastur.roidtaqi.workers.dev`: frontend Inventory di Cloudflare.
+- `poskastur.roidtaqi.workers.dev`: frontend POS di Cloudflare.
+- `kastur-sync.roidtaqi.workers.dev`: REST API dan WebSocket di Cloudflare Worker.
+- Neon Free: PostgreSQL utama.
 
-Semua layanan dipilih pada paket Free. Jangan mengaktifkan upgrade, paid plan, atau billing add-on.
+Backend Cloudflare berada di folder `cloudflare-sync-server`. Worker memakai Durable Object WebSocket Hibernation untuk koordinasi realtime dan Hyperdrive untuk mengakses Neon.
 
-## 1. Buat PostgreSQL Neon
+## 1. Amankan Neon
 
-1. Daftar di `https://console.neon.tech` dan buat project bernama `kastur`.
-2. Pilih region terdekat yang tersedia.
-3. Dari halaman Connect, salin pooled connection string.
-4. Simpan connection string tersebut sebagai `DATABASE_URL`. Jangan masukkan nilainya ke Git.
+Connection string yang pernah dikirim melalui chat harus dirotasi terlebih dahulu.
 
-## 2. Deploy Sync Server di Back4app
+1. Reset password role lama dari Neon Console.
+2. Buat role baru bernama `hyperdrive_user`.
+3. Buka `Connect`, pilih role tersebut, lalu nonaktifkan `Connection pooling`.
+4. Salin direct connection string. Host direct tidak mengandung `-pooler`.
 
-1. Daftar di `https://www.back4app.com` dengan GitHub.
-2. Pilih `Build new app -> Containers as a Service`.
-3. Hubungkan repo `roidtaqi/integrated-pos-app`.
-4. Pilih branch `main` dan isi Root Directory dengan `sync-server`.
-5. Pilih container `Free`.
-6. Tambahkan environment variables berikut:
-
-```txt
-DATABASE_URL=<pooled connection string Neon>
-POSTGRES_SSL=true
-SYNC_API_TOKEN=<token acak yang sama untuk kedua frontend>
-NODE_ENV=production
-```
-
-Token dapat dibuat di terminal dengan:
+Jika role yang dibuat lewat SQL tidak muncul di dropdown Connect, gunakan alat lokal berikut untuk mengganti kredensial direct URL dengan aman:
 
 ```bash
-openssl rand -base64 32
+bash scripts/prepare-hyperdrive-url.sh
 ```
 
-7. Deploy dan salin domain `https://....b4a.run`.
-8. Buka `https://....b4a.run/health`. Deployment siap jika response memiliki `ok: true` dan `storage: postgres`.
+Input connection string dan password disembunyikan selama pengetikan dan tidak disimpan ke file.
 
-## 3. Deploy POS di Cloudflare Pages
+Direct connection string hanya digunakan sekali saat membuat Hyperdrive. Jangan simpan di Git atau frontend.
 
-1. Di Cloudflare Dashboard buka `Workers & Pages -> Create -> Pages -> Connect to Git`.
+## 2. Buat Hyperdrive
+
+1. Buka Cloudflare Dashboard.
+2. Masuk ke `Workers & Pages -> Hyperdrive`.
+3. Pilih `Create configuration`.
+4. Gunakan nama `kastur-neon` dan database type PostgreSQL.
+5. Masukkan direct connection string Neon.
+6. Simpan, lalu salin Hyperdrive Configuration ID. ID ini bukan password.
+7. Ganti `REPLACE_WITH_HYPERDRIVE_ID` di `cloudflare-sync-server/wrangler.jsonc` dengan ID tersebut dan push ke GitHub.
+
+## 3. Deploy Backend Worker
+
+1. Di `Workers & Pages`, pilih `Create -> Import a repository`.
 2. Pilih repo `roidtaqi/integrated-pos-app`.
-3. Gunakan konfigurasi build:
+3. Gunakan konfigurasi:
 
 ```txt
-Framework preset: Vite
-Build command: npm ci && npm run build
-Build output directory: dist
-Root directory: /
+Worker name: kastur-sync
+Root directory: cloudflare-sync-server
+Build command: npm ci
+Deploy command: npm run deploy
 ```
 
-4. Tambahkan environment variables Production dan Preview:
+4. Setelah deploy pertama, buka Worker `kastur-sync`.
+5. Di `Settings -> Variables and Secrets`, tambahkan secret runtime:
 
 ```txt
-VITE_SYNC_URL=wss://....b4a.run
-VITE_SYNC_API_TOKEN=<nilai SYNC_API_TOKEN dari Back4app>
+SYNC_API_TOKEN=<token acak baru>
 ```
 
-5. Deploy. Cloudflare memberikan domain `https://integrated-pos-app.pages.dev` atau nama unik yang tersedia.
+Token dapat dibuat dengan `openssl rand -base64 32`. Deploy ulang setelah secret tersimpan.
 
-## 4. Deploy Inventory di Cloudflare Pages
+## 4. Hubungkan Frontend
 
-Ulangi langkah Cloudflare Pages untuk repo `roidtaqi/inventory-pricing-app` dengan build dan environment variables yang sama. Cloudflare akan memberikan domain `.pages.dev` kedua.
+Pada Build Variables `calckastur` dan `poskastur`, gunakan:
 
-## 5. Pindahkan Data Lama
+```txt
+VITE_SYNC_URL=wss://kastur-sync.roidtaqi.workers.dev
+VITE_SYNC_API_TOKEN=<nilai SYNC_API_TOKEN yang sama>
+```
 
-Jika PostgreSQL Railway masih dapat diakses:
+Rebuild kedua frontend. Variabel `VITE_*` harus tersedia saat build, bukan hanya sebagai runtime Worker variable.
+
+## 5. Verifikasi
+
+Buka:
+
+```txt
+https://kastur-sync.roidtaqi.workers.dev/health
+```
+
+Target response:
+
+```json
+{
+  "ok": true,
+  "service": "kastur-cloudflare-sync-server",
+  "storage": "postgres"
+}
+```
+
+Setelah itu uji login, produk, transaksi, shift, kas, pelanggan, dan approval dari dua perangkat berbeda.
+
+## Data Lama
+
+Jika PostgreSQL Railway masih dapat diakses, gunakan direct connection string untuk proses dump/restore:
 
 ```bash
 pg_dump "$RAILWAY_DATABASE_URL" --format=custom --no-owner --no-acl --file=kastur.dump
-pg_restore --clean --if-exists --no-owner --no-acl --dbname="$NEON_DATABASE_URL" kastur.dump
+pg_restore --clean --if-exists --no-owner --no-acl --dbname="$NEON_DIRECT_URL" kastur.dump
 ```
 
-Lakukan restore sebelum transaksi baru dibuat. Jika Railway tidak dapat diaktifkan, pertahankan data browser/PWA lama sampai backup lokal berhasil diekspor. IndexedDB terikat ke domain lama dan tidak otomatis ikut ke domain `.pages.dev`.
-
-## 6. Pemeriksaan Akhir
-
-1. Health server menunjukkan PostgreSQL aktif.
-2. Login POS dan Inventory berfungsi.
-3. Produk serta harga muncul di kedua perangkat.
-4. Buat satu transaksi uji, tutup shift, dan periksa kembali dari perangkat lain.
-5. Ajukan approval dari kasir dan pastikan owner menerimanya.
-6. Jangan menghapus project Railway atau data browser lama sebelum semua pemeriksaan berhasil.
-
-## Batas Paket Gratis
-
-- Cloudflare Pages memiliki kuota build dan Workers, tetapi frontend statis aplikasi ini berada jauh di bawah batas penggunaan normal toko kecil.
-- Back4app Free Container menyediakan resource terbatas dan ditujukan untuk preview/penggunaan ringan. Pantau memory dan restart pada dashboard.
-- Neon Free menyediakan 0.5 GB storage per project dan compute akan tidur ketika tidak aktif. Koneksi pertama setelah lama idle dapat sedikit lebih lambat.
+Jangan menggunakan pooled connection untuk `pg_dump` atau `pg_restore`.
