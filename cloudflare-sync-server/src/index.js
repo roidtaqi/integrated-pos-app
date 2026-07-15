@@ -8,6 +8,23 @@ const CORS_HEADERS = {
   'access-control-allow-headers': 'content-type,authorization,x-sync-token'
 };
 
+const TRUSTED_APP_ORIGINS = new Set([
+  'https://calckastur.roidtaqi.workers.dev',
+  'https://poskastur.roidtaqi.workers.dev'
+]);
+
+function isTrustedAppOrigin(origin) {
+  if (!origin) return false;
+  if (TRUSTED_APP_ORIGINS.has(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+    return url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
 const POS_TABLES = [
   ['users', 'pos_users'],
   ['roles', 'pos_roles'],
@@ -217,7 +234,28 @@ async function replaceSnapshot(client, domain, event) {
   }
 }
 
-async function readSnapshot(client, domain) {
+async function readSnapshotMeta(client, domain) {
+  const result = await client.query('select * from cloud_snapshot_meta where domain=$1', [domain]);
+  return result.rows[0] || null;
+}
+
+function snapshotUpdatedAt(meta) {
+  return toIso(meta?.received_at) || toIso(meta?.updated_at) || toIso(meta?.created_at);
+}
+
+function snapshotHasNotChanged(meta, since) {
+  const updatedAt = snapshotUpdatedAt(meta);
+  if (!since || !updatedAt) return false;
+
+  const sinceTime = Date.parse(since);
+  const updatedTime = Date.parse(updatedAt);
+  if (!Number.isNaN(sinceTime) && !Number.isNaN(updatedTime)) {
+    return updatedTime <= sinceTime;
+  }
+  return updatedAt === since;
+}
+
+async function readSnapshot(client, domain, knownMeta) {
   const snapshot = {};
   for (const [snapshotKey, table, customKey] of tableConfigs(domain)) {
     const key = customKey || 'id';
@@ -225,8 +263,7 @@ async function readSnapshot(client, domain) {
     snapshot[snapshotKey] = result.rows.map((row) => row.raw);
   }
 
-  const metaResult = await client.query('select * from cloud_snapshot_meta where domain=$1', [domain]);
-  const meta = metaResult.rows[0] || null;
+  const meta = knownMeta === undefined ? await readSnapshotMeta(client, domain) : knownMeta;
   const payloadMeta = meta?.payload_meta || {};
   const exportedAt = payloadMeta.exportedAt || toIso(meta?.updated_at) || new Date().toISOString();
   const payload = domain === 'pos'
@@ -334,6 +371,9 @@ export class SyncHub {
 
   async fetch(request) {
     if (request.headers.get('upgrade')?.toLowerCase() === 'websocket') {
+      if (!this.isAuthorized(request)) {
+        return jsonResponse({ ok: false, message: 'Unauthorized' }, 401);
+      }
       return this.upgradeWebSocket();
     }
     return this.handleHttp(request);
@@ -400,7 +440,13 @@ export class SyncHub {
         }
 
         if (url.pathname === '/api/pos/snapshot' && request.method === 'GET') {
-          const event = snapshotEvent('pos', await readSnapshot(client, 'pos'));
+          const meta = await readSnapshotMeta(client, 'pos');
+          const updatedAt = snapshotUpdatedAt(meta);
+          if (snapshotHasNotChanged(meta, url.searchParams.get('since'))) {
+            return jsonResponse({ ok: true, not_modified: true, snapshot: null, updated_at: updatedAt });
+          }
+
+          const event = snapshotEvent('pos', await readSnapshot(client, 'pos', meta));
           return jsonResponse({
             ok: true,
             event,
@@ -411,7 +457,13 @@ export class SyncHub {
         }
 
         if (url.pathname === '/api/inventory/snapshot' && request.method === 'GET') {
-          const event = snapshotEvent('inventory', await readSnapshot(client, 'inventory'));
+          const meta = await readSnapshotMeta(client, 'inventory');
+          const updatedAt = snapshotUpdatedAt(meta);
+          if (snapshotHasNotChanged(meta, url.searchParams.get('since'))) {
+            return jsonResponse({ ok: true, not_modified: true, snapshot: null, updated_at: updatedAt });
+          }
+
+          const event = snapshotEvent('inventory', await readSnapshot(client, 'inventory', meta));
           return jsonResponse({
             ok: true,
             event,
@@ -469,6 +521,7 @@ export class SyncHub {
             ok: true,
             duplicate,
             event_id: event.event_id,
+            updated_at: event.received_at,
             products: event.payload?.products?.length || 0
           });
         }
@@ -483,9 +536,12 @@ export class SyncHub {
 
   isAuthorized(request) {
     const apiToken = this.env.SYNC_API_TOKEN || '';
-    if (!apiToken) return true;
-    return request.headers.get('authorization') === `Bearer ${apiToken}`
-      || request.headers.get('x-sync-token') === apiToken;
+    if (apiToken) {
+      const tokenMatches = request.headers.get('authorization') === `Bearer ${apiToken}`
+        || request.headers.get('x-sync-token') === apiToken;
+      if (tokenMatches) return true;
+    }
+    return isTrustedAppOrigin(request.headers.get('origin'));
   }
 
   send(socket, message) {

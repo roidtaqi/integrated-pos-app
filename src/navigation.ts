@@ -26,7 +26,7 @@ export const navItems: {
   { name: 'Shift', path: '/shift', icon: Clock, permission: 'shift:manage' },
   { name: 'Laporan', path: '/reports', icon: BarChart3, permission: 'reports:view' },
   { name: 'Pelanggan', path: '/customers', icon: Users, permission: 'customers:manage' },
-  { name: 'Sinkronisasi', path: '/sync', icon: RefreshCw, permission: 'sync:manage' },
+  { name: 'Sinkronisasi', path: '/sync', icon: RefreshCw },
   { name: 'Karyawan', path: '/employees', icon: BriefcaseBusiness, permission: 'users:manage' },
   { name: 'Pengaturan', path: '/settings', icon: Settings, permission: 'settings:manage' },
   { name: 'Profil', path: '/profile', icon: UserRound }

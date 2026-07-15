@@ -105,7 +105,7 @@ Karena Inventory dan POS berjalan di HTTPS, URL sync harus memakai `wss://`, buk
 Default production POS sudah diarahkan ke server Kastur:
 
 ```txt
-wss://integrated-pos-sync-server.onrender.com
+wss://kastur-sync.roidtaqi.workers.dev
 ```
 
 Kastur POS tidak menampilkan input URL/token ke user kasir. POS otomatis connect memakai konfigurasi build aplikasi.
@@ -113,15 +113,15 @@ Kastur POS tidak menampilkan input URL/token ke user kasir. POS otomatis connect
 Jika suatu saat sync server pindah URL atau token diganti, ubah variable build di service frontend POS lalu redeploy:
 
 ```txt
-VITE_SYNC_URL=wss://domain-sync-baru.onrender.com
+VITE_SYNC_URL=wss://domain-sync-baru.example.com
 VITE_SYNC_API_TOKEN=token-yang-sama-dengan-sync-server
-VITE_POS_CLOUD_PULL_INTERVAL_MS=120000
-VITE_POS_CLOUD_PUSH_INTERVAL_MS=60000
+VITE_POS_CLOUD_PULL_INTERVAL_MS=15000
+VITE_POS_CLOUD_PUSH_INTERVAL_MS=15000
 ```
 
-`VITE_POS_CLOUD_PULL_INTERVAL_MS` mengatur interval POS otomatis mengambil backup cloud. Default-nya `120000` ms atau 2 menit. Nilai minimalnya 30000 ms.
+`VITE_POS_CLOUD_PULL_INTERVAL_MS` mengatur interval POS memeriksa perubahan cloud. Default dan nilai minimalnya `15000` ms. Snapshot lengkap hanya diambil ketika metadata cloud berubah.
 
-`VITE_POS_CLOUD_PUSH_INTERVAL_MS` mengatur interval POS otomatis upload backup cloud saat ada perubahan lokal. Default-nya `60000` ms atau 1 menit. Nilai minimalnya 15000 ms.
+`VITE_POS_CLOUD_PUSH_INTERVAL_MS` mengatur percobaan upload saat ada perubahan lokal. Default dan nilai minimalnya `15000` ms.
 
 Untuk service sync server, token REST API tetap memakai:
 
@@ -129,13 +129,14 @@ Untuk service sync server, token REST API tetap memakai:
 SYNC_API_TOKEN=token-yang-sama-dengan-frontend
 ```
 
-Inventory Pricing App masih perlu mengisi URL/token di halaman `Home -> Data & Pengaturan -> Sync`, karena Inventory dipakai sebagai perangkat admin/source of truth.
+URL/token tidak ditampilkan pada halaman pengguna. Keduanya ditetapkan saat build/deployment.
 
 Setelah kedua aplikasi tersambung:
 
-1. Dari Inventory, klik `Publish Catalog Sekarang`.
-2. Dari POS, buka `Sinkronisasi` dan pastikan status `CONNECTED`.
-3. Transaksi POS baru akan dikirim ke sync server dan diterima Inventory.
+1. Kedua aplikasi terhubung dan bertukar perubahan secara otomatis.
+2. Pengguna dapat membuka `Sinkronisasi` dan menekan `Sinkronkan Sekarang` untuk pembaruan langsung.
+3. Menu ini tersedia untuk semua role yang sudah login; permission bisnis tetap membatasi perubahan harga, approval, laporan, dan pengaturan.
+4. REST dan WebSocket produksi hanya menerima browser dari origin POS/Inventory Kastur atau token server yang valid.
 
 ### Cloud Snapshot Multi-device
 
@@ -152,16 +153,7 @@ GET /api/pos/sales
 GET /api/state
 ```
 
-Alur praktis:
-
-1. Di Inventory laptop, buka `Home -> Data & Pengaturan -> Sync`.
-2. URL sync server pada deployment Render sudah diatur ke `wss://integrated-pos-sync-server.onrender.com`.
-3. Klik `Upload Cloud`.
-4. Di Inventory HP, isi URL yang sama.
-5. Klik `Ambil Cloud`.
-6. Di POS, buka `Sinkronisasi`, lalu klik `Ambil Catalog Cloud` jika catalog belum masuk otomatis.
-
-POS juga menyimpan backup operasional lengkap ke cloud melalui tombol `Backup Semua Data` di halaman `Sinkronisasi`. Backup otomatis dijadwalkan saat transaksi, shift/absensi, kas, stok, pelanggan, profil user, permission, settings, atau catalog berubah, lalu dicoba ulang berkala sesuai `VITE_POS_CLOUD_PUSH_INTERVAL_MS` selama masih ada perubahan lokal yang belum ter-upload.
+POS menyimpan data operasional lengkap secara otomatis. Tombol `Sinkronkan Sekarang` mengirim perubahan lokal yang tertunda, mengambil data POS cloud terbaru, dan mengambil katalog Inventory dalam satu tindakan.
 
 Setiap device POS otomatis mengambil backup cloud secara berkala sesuai `VITE_POS_CLOUD_PULL_INTERVAL_MS`. Auto-restore akan dilewati jika device masih memiliki transaksi/queue pending atau perubahan lokal yang belum ter-upload agar data device tidak tertimpa.
 
@@ -173,9 +165,9 @@ Data POS yang ikut backup cloud:
 - Transaksi, item transaksi, pembayaran, dan status sync
 - Shift/absensi kasir, uang kas awal, kas masuk/keluar, kas akhir, dan selisih kas
 - Pelanggan
-- Audit log, sync log, dan sync queue
+- Audit log
 
-Setting teknis device seperti URL/token sync tidak ditimpa saat `Ambil Semua Data`.
+Setting teknis, sync log, dan sync queue bersifat lokal per perangkat dan tidak ditimpa oleh snapshot cloud.
 
 Jika ingin membatasi akses REST API, set env berikut pada service sync server:
 

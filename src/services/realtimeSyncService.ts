@@ -23,9 +23,9 @@ const DEVICE_SETTING_KEYS = new Set([
   POS_DEVICE_ID_SETTING,
   POS_LOCAL_DIRTY_SETTING
 ]);
-const DEFAULT_AUTO_PULL_INTERVAL_MS = 120000;
-const DEFAULT_AUTO_PUSH_INTERVAL_MS = 60000;
-const MIN_AUTO_PULL_INTERVAL_MS = 30000;
+const DEFAULT_AUTO_PULL_INTERVAL_MS = 15000;
+const DEFAULT_AUTO_PUSH_INTERVAL_MS = 15000;
+const MIN_AUTO_PULL_INTERVAL_MS = 15000;
 const MIN_AUTO_PUSH_INTERVAL_MS = 15000;
 const listeners = new Set<(status: ConnectionStatus) => void>();
 
@@ -38,6 +38,7 @@ let cloudPushTimer: number | undefined;
 let cloudRestoreRunning = false;
 let cloudBackupRunning = false;
 let manualClose = false;
+let initialCloudSyncComplete = false;
 
 function emit(nextStatus: ConnectionStatus) {
   status = nextStatus;
@@ -118,8 +119,8 @@ async function buildPosSnapshot() {
     shifts: await db.shifts.toArray(),
     cashMovements: await db.cash_movements.toArray(),
     customers: await db.customers.toArray(),
-    syncLogs: await db.sync_logs.toArray(),
-    syncQueue: await db.sync_queue.toArray(),
+    syncLogs: [],
+    syncQueue: [],
     auditLogs: await db.audit_logs.toArray(),
     appSettings
   };
@@ -174,8 +175,6 @@ async function importPosSnapshot(snapshot: Partial<PosSnapshot>) {
       db.shifts,
       db.cash_movements,
       db.customers,
-      db.sync_logs,
-      db.sync_queue,
       db.audit_logs,
       db.app_settings
     ],
@@ -196,8 +195,6 @@ async function importPosSnapshot(snapshot: Partial<PosSnapshot>) {
         db.shifts.clear(),
         db.cash_movements.clear(),
         db.customers.clear(),
-        db.sync_logs.clear(),
-        db.sync_queue.clear(),
         db.audit_logs.clear(),
         db.app_settings.clear()
       ]);
@@ -217,8 +214,6 @@ async function importPosSnapshot(snapshot: Partial<PosSnapshot>) {
       if (snapshot.shifts?.length) await db.shifts.bulkPut(snapshot.shifts);
       if (snapshot.cashMovements?.length) await db.cash_movements.bulkPut(snapshot.cashMovements);
       if (snapshot.customers?.length) await db.customers.bulkPut(snapshot.customers);
-      if (snapshot.syncLogs?.length) await db.sync_logs.bulkPut(snapshot.syncLogs);
-      if (snapshot.syncQueue?.length) await db.sync_queue.bulkPut(snapshot.syncQueue);
       if (snapshot.auditLogs?.length) await db.audit_logs.bulkPut(snapshot.auditLogs);
       if (appSettings.length) await db.app_settings.bulkPut(appSettings);
       if (existingDeviceSettings.length) await db.app_settings.bulkPut(existingDeviceSettings);
@@ -257,13 +252,16 @@ async function markQueueAccepted(eventId: string) {
 async function handleServerState(message: { latest_catalog?: unknown; latest_pos_snapshot?: { source_device_id?: string; payload?: unknown } | null }) {
   const latestCatalog = message.latest_catalog as { payload?: unknown } | null | undefined;
   if (latestCatalog?.payload) {
-    const result = await productService.importProductsFromJson(latestCatalog.payload as Parameters<typeof productService.importProductsFromJson>[0]);
+    const result = await productService.importProductsFromJson(
+      latestCatalog.payload as Parameters<typeof productService.importProductsFromJson>[0],
+      { fromCloud: true }
+    );
     if (result.success) {
       await logSync(`Realtime catalog diterima: ${result.count} produk`);
     }
   }
 
-  if (message.latest_pos_snapshot?.payload) {
+  if (initialCloudSyncComplete && message.latest_pos_snapshot?.payload) {
     await handleRemotePosSnapshot(message.latest_pos_snapshot.source_device_id);
   }
 }
@@ -271,7 +269,10 @@ async function handleServerState(message: { latest_catalog?: unknown; latest_pos
 async function handleCatalogSnapshot(message: { payload?: unknown }) {
   if (!message.payload) return;
 
-  const result = await productService.importProductsFromJson(message.payload as Parameters<typeof productService.importProductsFromJson>[0]);
+  const result = await productService.importProductsFromJson(
+    message.payload as Parameters<typeof productService.importProductsFromJson>[0],
+    { fromCloud: true }
+  );
   if (result.success) {
     await logSync(`Realtime catalog update diterapkan: ${result.count} produk`);
   }
@@ -407,17 +408,26 @@ export const realtimeSyncService = {
     if (config.enabled) {
       await this.connect(config.url);
     }
-    this.startAutoCloudPull();
+    try {
+      await this.pullCloudPosSnapshot(undefined, undefined, { automated: true });
+    } catch (error) {
+      console.warn('Initial POS cloud sync skipped', error);
+    } finally {
+      initialCloudSyncComplete = true;
+    }
+    this.startAutoCloudPull(false);
     this.startAutoCloudPush();
   },
 
-  startAutoCloudPull() {
+  startAutoCloudPull(runImmediately = true) {
     window.clearInterval(cloudPullTimer);
     const intervalMs = getAutoPullIntervalMs();
 
-    void this.pullCloudPosSnapshot(undefined, undefined, { automated: true }).catch((error) => {
-      console.error(error);
-    });
+    if (runImmediately) {
+      void this.pullCloudPosSnapshot(undefined, undefined, { automated: true }).catch((error) => {
+        console.error(error);
+      });
+    }
 
     cloudPullTimer = window.setInterval(() => {
       void this.pullCloudPosSnapshot(undefined, undefined, { automated: true }).catch((error) => {
@@ -508,6 +518,36 @@ export const realtimeSyncService = {
     await publishPendingQueue();
   },
 
+  async syncNow() {
+    const config = await this.getConfig();
+    if (status !== 'CONNECTED' && status !== 'CONNECTING') {
+      await this.connect(config.url);
+    }
+
+    await publishPendingQueue();
+
+    let uploadedRecords = 0;
+    if (await isLocalDirty()) {
+      const uploaded = await this.pushCloudPosSnapshot();
+      uploadedRecords = uploaded.records;
+    }
+
+    let restored = await this.pullCloudPosSnapshot();
+    if (!restored.success) {
+      const uploaded = await this.pushCloudPosSnapshot();
+      uploadedRecords = uploaded.records;
+      restored = await this.pullCloudPosSnapshot();
+    }
+
+    const catalog = await this.pullCloudCatalog();
+    return {
+      success: restored.success,
+      records: restored.records,
+      uploadedRecords,
+      products: catalog.success ? catalog.count : 0,
+    };
+  },
+
   async pullCloudCatalog(customUrl?: string, customToken?: string) {
     const config = await this.getConfig();
     const baseUrl = toHttpUrl(customUrl || config.url);
@@ -525,7 +565,7 @@ export const realtimeSyncService = {
       return { success: false, count: 0, message: 'Cloud belum memiliki catalog.' };
     }
 
-    const result = await productService.importProductsFromJson(data.snapshot);
+    const result = await productService.importProductsFromJson(data.snapshot, { fromCloud: true });
     if (result.success) {
       await logSync(`Cloud catalog diterima: ${result.count} produk`, true, 'CLOUD_CATALOG', result.count);
     }
@@ -605,7 +645,11 @@ export const realtimeSyncService = {
     cloudRestoreRunning = true;
 
     try {
-      const response = await fetch(`${baseUrl}/api/pos/snapshot`, {
+      const snapshotUrl = new URL(`${baseUrl}/api/pos/snapshot`);
+      const lastSeen = options.automated ? await getLastSeenCloudSnapshot() : '';
+      if (lastSeen) snapshotUrl.searchParams.set('since', lastSeen);
+
+      const response = await fetch(snapshotUrl, {
         headers: apiToken ? { 'x-sync-token': apiToken } : undefined
       });
 
@@ -614,8 +658,20 @@ export const realtimeSyncService = {
       }
 
       const data = await response.json();
+      if (data.not_modified) {
+        return { success: true, skipped: true, records: 0, message: 'Cloud belum berubah.' };
+      }
+
       if (!data.snapshot) {
         return { success: false, records: 0, message: 'Cloud belum memiliki backup POS.' };
+      }
+
+      if (options.automated && await isLocalDirty()) {
+        return { success: false, skipped: true, records: 0, message: 'Cloud berubah, tetapi device memiliki perubahan lokal yang harus di-upload lebih dulu.' };
+      }
+
+      if (options.automated && await hasPendingLocalSync()) {
+        return { success: false, skipped: true, records: 0, message: 'Cloud berubah, tetapi antrean lokal masih menunggu upload.' };
       }
 
       const updatedAt = data.updated_at as string | null | undefined;

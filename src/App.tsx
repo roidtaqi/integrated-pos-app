@@ -117,7 +117,7 @@ function App() {
             <Route path="shift" element={<PermissionGate permission="shift:manage"><Shift /></PermissionGate>} />
             <Route path="reports" element={<PermissionGate permission="reports:view"><Reports /></PermissionGate>} />
             <Route path="customers" element={<PermissionGate permission="customers:manage"><Customers /></PermissionGate>} />
-            <Route path="sync" element={<PermissionGate permission="sync:manage"><Sync /></PermissionGate>} />
+            <Route path="sync" element={<Sync />} />
             <Route path="settings" element={<PermissionGate permission="settings:manage"><Settings /></PermissionGate>} />
             <Route path="employees" element={<PermissionGate permission="users:manage"><Employees /></PermissionGate>} />
             <Route path="profile" element={<Profile />} />

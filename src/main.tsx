@@ -5,14 +5,23 @@ import App from './App.tsx'
 import { initializeDatabase } from './services/db.ts'
 import { realtimeSyncService } from './services/realtimeSyncService.ts'
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
+const root = createRoot(document.getElementById('root')!)
+
+root.render(
+  <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm font-semibold text-slate-600">
+    Menyiapkan Kastur POS...
+  </div>,
 )
 
-void initializeDatabase().catch((error) => {
-  console.error('Failed to initialize local POS database', error);
-}).then(() => {
-  void realtimeSyncService.autoStart();
-});
+void initializeDatabase()
+  .then(() => realtimeSyncService.autoStart())
+  .catch((error) => {
+    console.error('Failed to initialize POS cloud data', error)
+  })
+  .finally(() => {
+    root.render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    )
+  })

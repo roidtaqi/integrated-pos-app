@@ -227,10 +227,10 @@ function normalizeCatalog(data: InventoryPricingBackup) {
 }
 
 export const productService = {
-  async importProductsFromJson(jsonData: InventoryPricingBackup) {
+  async importProductsFromJson(jsonData: InventoryPricingBackup, options: { fromCloud?: boolean } = {}) {
     try {
       const normalized = normalizeCatalog(jsonData);
-      await this.persistCatalog(normalized.products, normalized.units, normalized.barcodes, 'IMPORT_PRODUCT');
+      await this.persistCatalog(normalized.products, normalized.units, normalized.barcodes, 'IMPORT_PRODUCT', options);
       return { success: true, count: normalized.products.length };
     } catch {
       return { success: false, message: 'Gagal mengimpor katalog JSON Inventory Pricing App.' };
@@ -248,7 +248,13 @@ export const productService = {
     }
   },
 
-  async persistCatalog(products: Product[], units: ProductUnit[], barcodes: ProductBarcode[], logType: 'IMPORT_PRODUCT' | 'IMPORT_CSV') {
+  async persistCatalog(
+    products: Product[],
+    units: ProductUnit[],
+    barcodes: ProductBarcode[],
+    logType: 'IMPORT_PRODUCT' | 'IMPORT_CSV',
+    options: { fromCloud?: boolean } = {}
+  ) {
     const now = new Date().toISOString();
 
     await db.transaction(
@@ -286,19 +292,21 @@ export const productService = {
           created_at: now
         });
 
-        await db.audit_logs.add({
-          id: createId('audit'),
-          user_id: 'system',
-          action: 'IMPORT_CATALOG',
-          entity: 'product',
-          entity_id: 'catalog',
-          metadata: JSON.stringify({ products: products.length, units: units.length }),
-          created_at: now
-        });
+        if (!options.fromCloud) {
+          await db.audit_logs.add({
+            id: createId('audit'),
+            user_id: 'system',
+            action: 'IMPORT_CATALOG',
+            entity: 'product',
+            entity_id: 'catalog',
+            metadata: JSON.stringify({ products: products.length, units: units.length }),
+            created_at: now
+          });
+        }
       }
     );
 
-    if (typeof window !== 'undefined') {
+    if (!options.fromCloud && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('pos-data-changed', { detail: { entity: 'catalog', action: 'imported', products: products.length } }));
     }
   },
